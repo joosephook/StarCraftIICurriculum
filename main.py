@@ -68,8 +68,14 @@ if __name__ == '__main__':
             # StarCraft2Env(map_name=args.map, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
         ]
 
+        args.map = 'TEST'
+
         # assume largest
         target_env = envs[-1]
+
+        for env in envs:
+            env_info = env.get_env_info()
+            print(env_info)
 
         # change args to accommodate largest possible env
         for env in envs[-1:]:
@@ -78,16 +84,36 @@ if __name__ == '__main__':
             args.n_agents = env_info["n_agents"]
             args.state_shape = env_info["state_shape"]
             args.obs_shape = env_info["obs_shape"]
+            # TODO: what to do with episode limit???
             args.episode_limit = env_info["episode_limit"]
 
         # get feature section sizes;
         # move feats, enemy feats, ally feats, own feats, maybe time feat
-        sections = [e.get_obs_sections() for e in envs]
-        state_sections = envs[-1].get_state_sections()
+        target_obs_sections   = envs[-1].get_obs_sections()
+        target_state_sections = envs[-1].get_state_sections()
+
+        obs_translators = []
+        state_translators = []
+        for env in envs:
+            obs_translators.append(Translator(env.get_obs_sections(), target_obs_sections))
+            state_translators.append(Translator(env.get_state_sections(), target_state_sections))
 
         # create translators for state and features
-        runner = Runner(env, args)
+        runner = Runner(envs[0], args, obs_translators[0], state_translators[0])
         if not args.evaluate:
+            runner.run(i)
+            runner.env.close()
+
+            runner.env = envs[1]
+            runner.rolloutWorker.env = envs[1]
+            runner.obs_trans = obs_translators[1]
+            runner.state_trans = state_translators[1]
+            runner.run(i)
+
+            runner.env = envs[2]
+            runner.rolloutWorker.env = envs[2]
+            runner.obs_trans = obs_translators[2]
+            runner.state_trans = state_translators[2]
             runner.run(i)
         else:
             win_rate, _ = runner.evaluate()

@@ -20,7 +20,7 @@ class RolloutWorker:
         self.min_epsilon = args.min_epsilon
         print('Init RolloutWorker')
 
-    def generate_episode(self, episode_num=None, evaluate=False):
+    def generate_episode(self, episode_num=None, evaluate=False, obs_trans=None, state_trans=None):
         if self.args.replay_dir != '' and evaluate and episode_num == 0:  # prepare for save replay of evaluation
             self.env.close()
         o, u, r, s, avail_u, u_onehot, terminate, padded = [], [], [], [], [], [], [], []
@@ -39,6 +39,7 @@ class RolloutWorker:
 
         # sample z for maven
         if self.args.alg == 'maven':
+            assert False, 'havent implemented translation'
             state = self.env.get_state()
             state = torch.tensor(state, dtype=torch.float32)
             if self.args.cuda:
@@ -49,11 +50,23 @@ class RolloutWorker:
 
         while not terminated and step < self.episode_limit:
             # time.sleep(0.2)
-            obs = self.env.get_obs()
-            state = self.env.get_state()
+            if obs_trans:
+                obs = [obs_trans.translate(o) for o in self.env.get_obs()]
+            else:
+                obs = self.env.get_obs()
+
+            if state_trans:
+                state = state_trans.translate(self.env.get_state())
+            else:
+                state = self.env.get_state()
+
             actions, avail_actions, actions_onehot = [], [], []
             for agent_id in range(self.n_agents):
                 avail_action = self.env.get_avail_agent_actions(agent_id)
+                avail_action_mask = np.zeros(self.args.n_actions)
+                avail_action_mask[np.nonzero(avail_action)] = 1.0
+                avail_action = avail_action_mask
+
                 if self.args.alg == 'maven':
                     action = self.agents.choose_action(obs[agent_id], last_action[agent_id], agent_id,
                                                        avail_action, epsilon, maven_z, evaluate)
@@ -83,8 +96,16 @@ class RolloutWorker:
             if self.args.epsilon_anneal_scale == 'step':
                 epsilon = epsilon - self.anneal_epsilon if epsilon > self.min_epsilon else epsilon
         # last obs
-        obs = self.env.get_obs()
-        state = self.env.get_state()
+        if obs_trans:
+            obs = [obs_trans.translate(o) for o in self.env.get_obs()]
+        else:
+            obs = self.env.get_obs()
+
+        if state_trans:
+            state = state_trans.translate(self.env.get_state())
+        else:
+            state = self.env.get_state()
+
         o.append(obs)
         s.append(state)
         o_next = o[1:]
@@ -95,6 +116,9 @@ class RolloutWorker:
         avail_actions = []
         for agent_id in range(self.n_agents):
             avail_action = self.env.get_avail_agent_actions(agent_id)
+            avail_action_mask = np.zeros(self.args.n_actions)
+            avail_action_mask[np.nonzero(avail_action)] = 1.0
+            avail_action = avail_action_mask
             avail_actions.append(avail_action)
         avail_u.append(avail_actions)
         avail_u_next = avail_u[1:]

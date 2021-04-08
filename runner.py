@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 
 
 class Runner:
-    def __init__(self, env, args):
+    def __init__(self, env, args, obs_trans, state_trans):
         self.env = env
+        self.obs_trans = obs_trans
+        self.state_trans = state_trans
 
         if args.alg.find('commnet') > -1 or args.alg.find('g2anet') > -1:  # communication agent
             self.agents = CommAgents(args)
@@ -41,7 +43,7 @@ class Runner:
             episodes = []
             # 收集self.args.n_episodes个episodes
             for episode_idx in range(self.args.n_episodes):
-                episode, _, _, steps = self.rolloutWorker.generate_episode(episode_idx)
+                episode, _, _, steps = self.rolloutWorker.generate_episode(episode_idx, obs_trans=self.obs_trans, state_trans=self.state_trans)
                 episodes.append(episode)
                 time_steps += steps
                 # print(_)
@@ -70,7 +72,7 @@ class Runner:
         win_number = 0
         episode_rewards = 0
         for epoch in range(self.args.evaluate_epoch):
-            _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True)
+            _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True, obs_trans=self.obs_trans, state_trans=self.state_trans)
             episode_rewards += episode_reward
             if win_tag:
                 win_number += 1
