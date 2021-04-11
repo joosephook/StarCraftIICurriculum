@@ -1,3 +1,4 @@
+from common.replay_buffer import ReplayBuffer
 from runner import Runner
 from smac.env import StarCraft2Env
 from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
@@ -45,7 +46,7 @@ class TranslatorMixin:
         return self._translate(state, self.state_src, self.state_dst)
 
 if __name__ == '__main__':
-    for i in range(8):
+    for i in range(1):
         args = get_common_args()
         if args.alg.find('coma') > -1:
             args = get_coma_args(args)
@@ -60,15 +61,39 @@ if __name__ == '__main__':
         if args.alg.find('g2anet') > -1:
             args = get_g2anet_args(args)
 
+        import torch
+        import numpy
+        seed = 12345
+        np.random.seed(seed)
+        torch.manual_seed(seed)
         envs = [
-            StarCraft2Env(map_name='3s_vs_3z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
-            StarCraft2Env(map_name='3s_vs_4z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
-            StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
+            StarCraft2Env(map_name='3s_vs_3z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+                          seed=32**2-1),
+            StarCraft2Env(map_name='3s_vs_4z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+                          seed=32**2-1),
+            StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+                          seed=32**2-1),
             # StarCraft2Env(map_name=args.map, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
             # StarCraft2Env(map_name=args.map, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
         ]
 
-        args.map = 'TEST'
+        import time
+        import os
+        args.map = f'TEST CLEARBUF{int(time.time())}'
+        with open(__file__, 'r') as f:
+            main = f.readlines()
+        with open('common/arguments.py', 'r') as f:
+            arguments = f.readlines()
+
+        path = args.result_dir + '/' + args.alg + '/' + args.map
+
+        if not os.path.isdir(path):
+            os.makedirs(path)
+
+        with open(path+f'/{os.path.basename(__file__)}', 'w') as f:
+            f.writelines(main)
+        with open(path+'/arguments.py', 'w') as f:
+            f.writelines(arguments)
 
         # assume largest
         target_env = envs[-1]
@@ -101,19 +126,29 @@ if __name__ == '__main__':
         # create translators for state and features
         runner = Runner(envs[0], args, obs_translators[0], state_translators[0])
         if not args.evaluate:
+            runner.args.n_steps = 20_000
             runner.run(i)
             runner.env.close()
 
+            # WHAT ABOUT EPSILON?
+            runner.args.n_steps = 20_000
             runner.env = envs[1]
             runner.rolloutWorker.env = envs[1]
             runner.obs_trans = obs_translators[1]
             runner.state_trans = state_translators[1]
+            if True and not args.evaluate and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
+                    'reinforce') == -1:  # these 3 algorithms are on-poliy
+                runner.buffer = ReplayBuffer(args)
             runner.run(i)
 
+            runner.args.n_steps = 2_000_000
             runner.env = envs[2]
             runner.rolloutWorker.env = envs[2]
             runner.obs_trans = obs_translators[2]
             runner.state_trans = state_translators[2]
+            if True and not args.evaluate and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
+                    'reinforce') == -1:  # these 3 algorithms are on-poliy
+                runner.buffer = ReplayBuffer(args)
             runner.run(i)
         else:
             win_rate, _ = runner.evaluate()
