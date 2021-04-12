@@ -15,38 +15,40 @@ class ReplayBuffer:
         self.current_idx = 0
         self.current_size = 0
         # create the buffer to store info
-        self.buffers = {'o': np.empty([self.size, self.episode_limit, self.n_agents, self.obs_shape]),
-                        'u': np.empty([self.size, self.episode_limit, self.n_agents, 1]),
-                        's': np.empty([self.size, self.episode_limit, self.state_shape]),
-                        'r': np.empty([self.size, self.episode_limit, 1]),
-                        'o_next': np.empty([self.size, self.episode_limit, self.n_agents, self.obs_shape]),
-                        's_next': np.empty([self.size, self.episode_limit, self.state_shape]),
-                        'avail_u': np.empty([self.size, self.episode_limit, self.n_agents, self.n_actions]),
-                        'avail_u_next': np.empty([self.size, self.episode_limit, self.n_agents, self.n_actions]),
-                        'u_onehot': np.empty([self.size, self.episode_limit, self.n_agents, self.n_actions]),
-                        'padded': np.empty([self.size, self.episode_limit, 1]),
-                        'terminated': np.empty([self.size, self.episode_limit, 1])
+        self.buffers = {'o': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=np.float32),
+                        'u': np.zeros([self.size, self.episode_limit, self.n_agents, 1], dtype=np.float32),
+                        's': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=np.float32),
+                        'r': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32),
+                        'o_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=np.float32),
+                        's_next': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=np.float32),
+                        'avail_u': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+                        'avail_u_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+                        'u_onehot': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+                        'padded': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32),
+                        'terminated': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32)
                         }
         if self.args.alg == 'maven':
-            self.buffers['z'] = np.empty([self.size, self.args.noise_dim])
+            self.buffers['z'] = np.empty([self.size, self.args.noise_dim], dtype=np.float32)
         # thread lock
         self.lock = threading.Lock()
 
         # store the episode
     def store_episode(self, episode_batch):
         batch_size = episode_batch['o'].shape[0]  # episode_number
+        batch_size, timesteps, n_agents, obs_size = episode_batch['o'].shape
+        *rest, n_actions, _ = episode_batch['u'].shape
         with self.lock:
             idxs = self._get_storage_idx(inc=batch_size)
             # store the informations
-            self.buffers['o'][idxs] = episode_batch['o']
-            self.buffers['u'][idxs] = episode_batch['u']
+            self.buffers['o'][idxs, :, :n_agents, :] = episode_batch['o']
+            self.buffers['u'][idxs, :, :n_actions, :] = episode_batch['u']
             self.buffers['s'][idxs] = episode_batch['s']
             self.buffers['r'][idxs] = episode_batch['r']
-            self.buffers['o_next'][idxs] = episode_batch['o_next']
+            self.buffers['o_next'][idxs, :, :n_agents, :] = episode_batch['o_next']
             self.buffers['s_next'][idxs] = episode_batch['s_next']
-            self.buffers['avail_u'][idxs] = episode_batch['avail_u']
-            self.buffers['avail_u_next'][idxs] = episode_batch['avail_u_next']
-            self.buffers['u_onehot'][idxs] = episode_batch['u_onehot']
+            self.buffers['avail_u'][idxs, :, :n_actions, :] = episode_batch['avail_u']
+            self.buffers['avail_u_next'][idxs, :, :n_actions, :] = episode_batch['avail_u_next']
+            self.buffers['u_onehot'][idxs, :, :n_actions, :] = episode_batch['u_onehot']
             self.buffers['padded'][idxs] = episode_batch['padded']
             self.buffers['terminated'][idxs] = episode_batch['terminated']
             if self.args.alg == 'maven':

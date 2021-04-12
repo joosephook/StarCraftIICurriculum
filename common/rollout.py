@@ -61,7 +61,7 @@ class RolloutWorker:
                 state = self.env.get_state()
 
             actions, avail_actions, actions_onehot = [], [], []
-            for agent_id in range(self.n_agents):
+            for agent_id in range(self.env.n_agents):
                 avail_action = self.env.get_avail_agent_actions(agent_id)
                 avail_action_mask = np.zeros(self.args.n_actions)
                 avail_action_mask[np.nonzero(avail_action)] = 1.0
@@ -85,7 +85,7 @@ class RolloutWorker:
             win_tag = True if terminated and 'battle_won' in info and info['battle_won'] else False
             o.append(obs)
             s.append(state)
-            u.append(np.reshape(actions, [self.n_agents, 1]))
+            u.append(np.reshape(actions, [self.env.n_agents, 1]))
             u_onehot.append(actions_onehot)
             avail_u.append(avail_actions)
             r.append([reward])
@@ -114,7 +114,7 @@ class RolloutWorker:
         s = s[:-1]
         # get avail_action for last obs，because target_q needs avail_action in training
         avail_actions = []
-        for agent_id in range(self.n_agents):
+        for agent_id in range(self.env.n_agents):
             avail_action = self.env.get_avail_agent_actions(agent_id)
             avail_action_mask = np.zeros(self.args.n_actions)
             avail_action_mask[np.nonzero(avail_action)] = 1.0
@@ -126,15 +126,15 @@ class RolloutWorker:
 
         # if step < self.episode_limit，padding
         for i in range(step, self.episode_limit):
-            o.append(np.zeros((self.n_agents, self.obs_shape)))
-            u.append(np.zeros([self.n_agents, 1]))
+            o.append(np.zeros((self.env.n_agents, self.obs_shape)))
+            u.append(np.zeros([self.env.n_agents, 1]))
             s.append(np.zeros(self.state_shape))
             r.append([0.])
-            o_next.append(np.zeros((self.n_agents, self.obs_shape)))
+            o_next.append(np.zeros((self.env.n_agents, self.obs_shape)))
             s_next.append(np.zeros(self.state_shape))
-            u_onehot.append(np.zeros((self.n_agents, self.n_actions)))
-            avail_u.append(np.zeros((self.n_agents, self.n_actions)))
-            avail_u_next.append(np.zeros((self.n_agents, self.n_actions)))
+            u_onehot.append(np.zeros((self.env.n_agents, self.n_actions)))
+            avail_u.append(np.zeros((self.env.n_agents, self.n_actions)))
+            avail_u_next.append(np.zeros((self.env.n_agents, self.n_actions)))
             padded.append([1.])
             terminate.append([1.])
 
