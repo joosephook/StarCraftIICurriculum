@@ -67,12 +67,14 @@ if __name__ == '__main__':
         np.random.seed(seed)
         torch.manual_seed(seed)
         envs = [
-            StarCraft2Env(map_name='3s_vs_3z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            StarCraft2Env(map_name='5m_vs_6m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
                           seed=32**2-1),
-            StarCraft2Env(map_name='3s_vs_4z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            StarCraft2Env(map_name='8m_vs_9m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
                           seed=32**2-1),
-            StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
                           seed=32**2-1),
+            # StarCraft2Env(map_name='27m_vs_30m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=32**2-1),
             # StarCraft2Env(map_name=args.map, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
             # StarCraft2Env(map_name=args.map, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir),
         ]
@@ -85,7 +87,8 @@ if __name__ == '__main__':
         with open('common/arguments.py', 'r') as f:
             arguments = f.readlines()
 
-        path = args.result_dir + '/' + args.alg + '/' + args.map
+        path = os.path.join(args.result_dir, args.map, args.alg)
+        args.save_path = path
 
         if not os.path.isdir(path):
             os.makedirs(path)
@@ -123,15 +126,15 @@ if __name__ == '__main__':
             obs_translators.append(Translator(env.get_obs_sections(), target_obs_sections))
             state_translators.append(Translator(env.get_state_sections(), target_state_sections))
 
-        # create translators for state and features
+        # TODO: AGENT NUMBER IS BROKEN
         runner = Runner(envs[0], args, obs_translators[0], state_translators[0])
         if not args.evaluate:
-            runner.args.n_steps = 20_000
+            runner.args.n_steps = 10_000
             runner.run(i)
             runner.env.close()
 
             # WHAT ABOUT EPSILON?
-            runner.args.n_steps = 20_000
+            runner.args.n_steps = 10_000
             runner.env = envs[1]
             runner.rolloutWorker.env = envs[1]
             runner.obs_trans = obs_translators[1]
@@ -141,7 +144,8 @@ if __name__ == '__main__':
                 runner.buffer = ReplayBuffer(args)
             runner.run(i)
 
-            runner.args.n_steps = 2_000_000
+            # WHAT ABOUT EPSILON?
+            runner.args.n_steps = 10_000
             runner.env = envs[2]
             runner.rolloutWorker.env = envs[2]
             runner.obs_trans = obs_translators[2]
@@ -150,6 +154,16 @@ if __name__ == '__main__':
                     'reinforce') == -1:  # these 3 algorithms are on-poliy
                 runner.buffer = ReplayBuffer(args)
             runner.run(i)
+
+            # runner.args.n_steps = 2_000_000
+            # runner.env = envs[3]
+            # runner.rolloutWorker.env = envs[3]
+            # runner.obs_trans = obs_translators[3]
+            # runner.state_trans = state_translators[3]
+            # if True and not args.evaluate and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
+            #         'reinforce') == -1:  # these 3 algorithms are on-poliy
+            #     runner.buffer = ReplayBuffer(args)
+            # runner.run(i)
         else:
             win_rate, _ = runner.evaluate()
             print('The win rate of {} is  {}'.format(args.alg, win_rate))

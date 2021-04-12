@@ -25,7 +25,7 @@ class Runner:
         self.episode_rewards = []
 
         # 用来保存plt和pkl
-        self.save_path = self.args.result_dir + '/' + args.alg + '/' + args.map
+        self.save_path = args.save_path
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
 
