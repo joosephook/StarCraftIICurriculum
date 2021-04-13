@@ -48,7 +48,7 @@ class RolloutWorker:
             maven_z = one_hot_categorical.OneHotCategorical(z_prob).sample()
             maven_z = list(maven_z.cpu())
 
-        while not terminated and step < self.episode_limit:
+        while not terminated and step < self.args.episode_limit:
             # time.sleep(0.2)
             if obs_trans:
                 obs = [obs_trans.translate(o) for o in self.env.get_obs()]
@@ -85,7 +85,7 @@ class RolloutWorker:
             win_tag = True if terminated and 'battle_won' in info and info['battle_won'] else False
             o.append(obs)
             s.append(state)
-            u.append(np.reshape(actions, [self.env.n_agents, 1]))
+            u.append(np.reshape(actions, [self.env.n_agents, 1])) # TODO
             u_onehot.append(actions_onehot)
             avail_u.append(avail_actions)
             r.append([reward])
@@ -125,7 +125,7 @@ class RolloutWorker:
         avail_u = avail_u[:-1]
 
         # if step < self.episode_limit，padding
-        for i in range(step, self.episode_limit):
+        for i in range(step, self.args.episode_limit):
             o.append(np.zeros((self.env.n_agents, self.obs_shape)))
             u.append(np.zeros([self.env.n_agents, 1]))
             s.append(np.zeros(self.state_shape))
