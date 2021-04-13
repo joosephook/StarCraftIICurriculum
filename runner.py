@@ -19,7 +19,7 @@ class Runner:
             self.agents = Agents(args)
             self.rolloutWorker = RolloutWorker(env, self.agents, args)
         if not args.evaluate and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find('reinforce') == -1:  # these 3 algorithms are on-poliy
-            self.buffer = ReplayBuffer(args)
+            self.buffer = None
         self.args = args
         self.win_rates = []
         self.episode_rewards = []
