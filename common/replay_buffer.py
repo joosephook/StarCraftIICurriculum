@@ -20,34 +20,41 @@ class ReplayBuffer:
                       "to the network, but does it make sense for the action?"\
                       "The other agents aren't always taking the 0 action, so it"\
                       " would be wrong to say they do..."
-
-
+        dtype = np.float16
         self.buffers = {
             # zero padding ok because it is just input data, 0 means "missing data"
-            'o': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=np.float32),
+            'o': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=dtype),
             # action: zero padding doesn't make sense because the non-existent agents would be taking action 0,
-            'u': np.zeros([self.size, self.episode_limit, self.n_agents, 1], dtype=np.float32),
+            'u': np.zeros([self.size, self.episode_limit, self.n_agents, 1], dtype=dtype),
             # zero padding ok because it is just input data, 0 means "missing data"
-            's': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=np.float32),
+            's': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=dtype),
             # no zero padding needed
-            'r': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32),
+            'r': np.zeros([self.size, self.episode_limit, 1], dtype=dtype),
             # zero padding ok because it is just input data, 0 means "missing data"
-            'o_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=np.float32),
+            'o_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=dtype),
             # zero padding ok because it is just input data, 0 means "missing data"
-            's_next': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=np.float32),
+            's_next': np.zeros([self.size, self.episode_limit, self.state_shape], dtype=dtype),
             # zero padding would be ok because avail_u is the mask of available actions, zero means an action is not available
-            'avail_u': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+            'avail_u': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=dtype),
             # zero padding would be ok because avail_u_next is the mask of available actions, zero means an action is not available
-            'avail_u_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+            'avail_u_next': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=dtype),
             # zero padding would be ok because adding more zeroes just extends the space of possible actions
-            'u_onehot': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=np.float32),
+            'u_onehot': np.zeros([self.size, self.episode_limit, self.n_agents, self.n_actions], dtype=dtype),
             # zero padding not needed
-            'padded': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32),
+            'padded': np.zeros([self.size, self.episode_limit, 1], dtype=dtype),
             # zero padding not needed
-            'terminated': np.zeros([self.size, self.episode_limit, 1], dtype=np.float32)
+            'terminated': np.zeros([self.size, self.episode_limit, 1], dtype=dtype)
         }
+        # force allocation, we don't want to run OOM later in the experiment...
+        bytes = 0
+        for buf in self.buffers.values():
+            # buf[:] = 0
+            bytes += buf.nbytes
+        print("Buffers would consume", bytes/(1024*1024*1024), "GiB of memory.")
+
+
         if self.args.alg == 'maven':
-            self.buffers['z'] = np.empty([self.size, self.args.noise_dim], dtype=np.float32)
+            self.buffers['z'] = np.empty([self.size, self.args.noise_dim], dtype=dtype)
         # thread lock
         self.lock = threading.Lock()
 
