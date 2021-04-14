@@ -62,42 +62,59 @@ def save_config(args):
         f.writelines(arguments)
 
 if __name__ == '__main__':
-    for i in range(1):
-        args = get_common_args()
-        if args.alg.find('coma') > -1:
-            args = get_coma_args(args)
-        elif args.alg.find('central_v') > -1:
-            args = get_centralv_args(args)
-        elif args.alg.find('reinforce') > -1:
-            args = get_reinforce_args(args)
-        else:
-            args = get_mixer_args(args)
-        if args.alg.find('commnet') > -1:
-            args = get_commnet_args(args)
-        if args.alg.find('g2anet') > -1:
-            args = get_g2anet_args(args)
+    args = get_common_args()
+    args.alg = 'qmix'
+    if args.alg.find('coma') > -1:
+        args = get_coma_args(args)
+    elif args.alg.find('central_v') > -1:
+        args = get_centralv_args(args)
+    elif args.alg.find('reinforce') > -1:
+        args = get_reinforce_args(args)
+    else:
+        args = get_mixer_args(args)
+    if args.alg.find('commnet') > -1:
+        args = get_commnet_args(args)
+    if args.alg.find('g2anet') > -1:
+        args = get_g2anet_args(args)
 
-        unsupported = "coma central_v reinforce".split()
-        if args.alg in unsupported:
-            assert False, "These algos aren't supported yet (refer to ReplayBuffer)"
-            # on-policy algorithms, don't utilise the replaybuffer
+    unsupported = "coma central_v reinforce".split()
+    if args.alg in unsupported:
+        assert False, "These algos aren't supported yet (refer to ReplayBuffer)"  # on-policy algorithms, don't utilise the replaybuffer
 
+    for i in range(5):
         import torch
-        import numpy
-        seed = 12345
+        seed = 12345+i
         np.random.seed(seed)
         torch.manual_seed(seed)
 
+        map_names = ['3s_vs_5z']
+        # envs = [
+            # StarCraft2Env(map_name='5m_vs_6m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=32**2-1),
+            # StarCraft2Env(map_name='8m_vs_9m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=32**2-1),
+            # StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=32**2-1),
+            # StarCraft2Env(map_name='27m_vs_30m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=32 ** 2 - 1),
+
+            # StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty,
+            #               game_version=args.game_version, replay_dir=args.replay_dir,
+            #               seed=seed),
+        # ]
         envs = [
-            StarCraft2Env(map_name='5m_vs_6m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-                          seed=32**2-1),
-            StarCraft2Env(map_name='8m_vs_9m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-                          seed=32**2-1),
-            StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-                          seed=32**2-1),
+            StarCraft2Env(map_name=m, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
+                          seed=seed)
+            for m in map_names
+        ]
+        env_timesteps = [
+            2_000_000
         ]
 
-        experiment_name = f'TEST CLEARBUF {int(time.time())}'
+        curriculum = '->'.join(map_names)
+        buffer_dtype = np.float16
+        experiment_name = f'{int(time.time())}  {curriculum} {buffer_dtype} {args.alg}'
+
         args.save_path = os.path.join(args.result_dir, experiment_name, args.alg)
         save_config(args)
 
@@ -137,13 +154,14 @@ if __name__ == '__main__':
         # TODO: AGENT NUMBER IS BROKEN
         runner = Runner(envs[0], args, obs_translators[0], state_translators[0])
         new_buffer = True
-
         if not args.evaluate:
-            runner.args.n_steps = 10_000
+            runner.args.n_steps = 2_000_000
             runner.args.episode_limit = envs[0].get_env_info()["episode_limit"]
-            runner.buffer = ReplayBuffer(args)
+            if new_buffer and hasattr(runner, "buffer"):
+                runner.buffer = ReplayBuffer(args, buffer_dtype)
             runner.run(i)
             runner.env.close()
+            exit(0)
 
             # WHAT ABOUT EPSILON?
             runner.args.n_steps = 10_000
@@ -153,26 +171,27 @@ if __name__ == '__main__':
             runner.obs_trans = obs_translators[1]
             runner.state_trans = state_translators[1]
             if new_buffer and hasattr(runner, "buffer"):
-                runner.buffer = ReplayBuffer(args)
+                runner.buffer = ReplayBuffer(args, buffer_dtype)
             runner.run(i)
 
             # WHAT ABOUT EPSILON?
-            runner.args.n_steps = 10_000
+            runner.args.n_steps = 2_000_000
+            runner.args.episode_limit = envs[2].get_env_info()["episode_limit"]
             runner.env = envs[2]
             runner.rolloutWorker.env = envs[2]
             runner.obs_trans = obs_translators[2]
             runner.state_trans = state_translators[2]
             if new_buffer and hasattr(runner, "buffer"):
-                runner.buffer = ReplayBuffer(args)
+                runner.buffer = ReplayBuffer(args, buffer_dtype)
             runner.run(i)
 
             # runner.args.n_steps = 2_000_000
+            # runner.args.episode_limit = envs[3].get_env_info()["episode_limit"]
             # runner.env = envs[3]
             # runner.rolloutWorker.env = envs[3]
             # runner.obs_trans = obs_translators[3]
             # runner.state_trans = state_translators[3]
-            # if True and not args.evaluate and args.alg.find('coma') == -1 and args.alg.find('central_v') == -1 and args.alg.find(
-            #         'reinforce') == -1:  # these 3 algorithms are on-poliy
+            # if new_buffer and hasattr(runner, "buffer"):
             #     runner.buffer = ReplayBuffer(args)
             # runner.run(i)
 
