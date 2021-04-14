@@ -3,7 +3,7 @@ import threading
 
 
 class ReplayBuffer:
-    def __init__(self, args):
+    def __init__(self, args, dtype):
         self.args = args
         self.n_actions = self.args.n_actions
         self.n_agents = self.args.n_agents
@@ -20,7 +20,6 @@ class ReplayBuffer:
                       "to the network, but does it make sense for the action?"\
                       "The other agents aren't always taking the 0 action, so it"\
                       " would be wrong to say they do..."
-        dtype = np.float16
         self.buffers = {
             # zero padding ok because it is just input data, 0 means "missing data"
             'o': np.zeros([self.size, self.episode_limit, self.n_agents, self.obs_shape], dtype=dtype),
