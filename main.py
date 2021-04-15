@@ -23,29 +23,22 @@ class Translator:
         return dst
 
 
-class TranslatorMixin:
-    def __init__(self, o_src, o_dst, s_src, s_dst):
-        assert len(o_src) == len(o_dst), f"Source and destination observations have different number of sections, {len(o_src)} vs {len(o_dst)}"
-        assert len(s_src) == len(s_dst), f"Source and destination states have different number of sections, {len(s_src)} vs {len(s_dst)}"
-        self.obs_src = o_src
-        self.obs_dst = o_dst
-        self.state_src = s_src
-        self.state_dst = s_dst
+class EnvTransWrapper:
+    def __init__(self, env, obs_trans, state_trans):
+        self.env = env
+        self.obs_trans = obs_trans
+        self.state_trans = state_trans
 
-    def translate_obs(self, obs):
-        return self._translate(obs, self.obs_src, self.obs_dst)
+    def __getattr__(self, item):
+        if item == 'get_obs':
+            observations = [self.obs_trans.translate(o) for o in self.env.get_obs()]
+            return observations
+        elif item == 'get_state':
+            state = self.state_trans.translate(self.env.get_state())
+            return state
+        else:
+            return getattr(self.env, item)
 
-    def _translate(self, src, src_structure, target_structure):
-        dst = np.zeros(target_structure[-1])
-
-        for i in range(len(target_structure) - 1):
-            width = src_structure[i + 1] - src_structure[i]
-            dst[target_structure[i]:target_structure[i] + width] = src[src_structure[i]: src_structure[i + 1]]
-
-        return dst
-
-    def translate_state(self, state):
-        return self._translate(state, self.state_src, self.state_dst)
 
 def save_config(args):
     with open(__file__, 'r') as f:
@@ -89,7 +82,9 @@ if __name__ == '__main__':
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-        map_names = ['3s_vs_3z', '3s_vs_4z', '3s_vs_5z']
+        map_names = [
+            '3s_vs_5z',
+        ]
         # envs = [
             # StarCraft2Env(map_name='5m_vs_6m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
             #               seed=32**2-1),
@@ -110,9 +105,7 @@ if __name__ == '__main__':
             for m in map_names
         ]
         env_timesteps = [
-            10_001,
-            10_001,
-            10_001
+            2_000_000
         ]
 
         for env in envs:
