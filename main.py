@@ -31,13 +31,19 @@ class EnvTransWrapper:
 
     def __getattr__(self, item):
         if item == 'get_obs':
-            observations = [self.obs_trans.translate(o) for o in self.env.get_obs()]
-            return observations
+            return self.wrap_get_obs
         elif item == 'get_state':
-            state = self.state_trans.translate(self.env.get_state())
-            return state
+            return self.wrap_get_state
         else:
             return getattr(self.env, item)
+
+    def wrap_get_obs(self):
+        observations = [self.obs_trans.translate(o) for o in self.env.get_obs()]
+        return observations
+
+    def wrap_get_state(self):
+        state = self.state_trans.translate(self.env.get_state())
+        return state
 
 
 def save_config(args):
@@ -83,40 +89,30 @@ if __name__ == '__main__':
         torch.manual_seed(seed)
 
         map_names = [
-            '3s_vs_5z',
+            '3s_vs_3z',
         ]
-        # envs = [
-            # StarCraft2Env(map_name='5m_vs_6m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-            #               seed=32**2-1),
-            # StarCraft2Env(map_name='8m_vs_9m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-            #               seed=32**2-1),
-            # StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-            #               seed=32**2-1),
-            # StarCraft2Env(map_name='27m_vs_30m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-            #               seed=32 ** 2 - 1),
-
-            # StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty,
-            #               game_version=args.game_version, replay_dir=args.replay_dir,
-            #               seed=seed),
-        # ]
         envs = [
             StarCraft2Env(map_name=m, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
                           seed=seed)
             for m in map_names
         ]
         env_timesteps = [
-            2_000_000
+            200_000,
         ]
 
         for env in envs:
             env_info = env.get_env_info()
             print(env_info)
+
         curriculum = '->'.join(map_names)
         buffer_dtype = np.float16
         experiment_name = f'{timestamp} {curriculum} {buffer_dtype} {args.alg}'
 
         # assume largest
         target_env = envs[-1]
+        target_env = StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version,
+                                   replay_dir=args.replay_dir,
+                                   seed=seed)
         # change args to accommodate largest possible env
         # assures the widths of the created neural networks are sufficient
         env_info = target_env.get_env_info()
@@ -131,35 +127,32 @@ if __name__ == '__main__':
             target_obs_sections   = target_env.get_obs_sections()
             target_state_sections = target_env.get_state_sections()
 
-            obs_translators = []
-            state_translators = []
+            wrapped_envs = []
             for env in envs:
-                obs_translators.append(Translator(env.get_obs_sections(), target_obs_sections))
-                state_translators.append(Translator(env.get_state_sections(), target_state_sections))
-            return obs_translators, state_translators
+                o_trans = Translator(env.get_obs_sections(), target_obs_sections)
+                s_trans = Translator(env.get_state_sections(), target_state_sections)
+                wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
 
-        obs_translators, state_translators = create_translators(envs, target_env)
+            return wrapped_envs
+
+        envs = create_translators(envs, target_env)
         # TODO: AGENT NUMBER IS BROKEN
         args.save_path = os.path.join(args.result_dir, experiment_name, args.alg, str(i))
         save_config(args)
-        runner = Runner(envs[0], args, obs_translators[0], state_translators[0])
+        runner = Runner(envs[0], args, target_env)
 
         new_buffer = True
         assert len(envs) == len(env_timesteps)
-        assert len(envs) == len(obs_translators)
-        assert len(envs) == len(state_translators)
         episode_limits = [ e.get_env_info()["episode_limit"] for e in envs]
 
         if not args.evaluate:
-            for env, env_time, ep_lim, obs_tr, state_tr in zip(
-                envs, env_timesteps, episode_limits, obs_translators, state_translators
+            for env, env_time, ep_lim, in zip(
+                envs, env_timesteps, episode_limits
             ):
                 runner.env = env
                 runner.rolloutWorker.env = env
                 runner.args.n_steps = env_time
                 runner.args.episode_limit = ep_lim
-                runner.obs_trans = obs_tr
-                runner.state_trans = state_tr
                 if new_buffer and hasattr(runner, "buffer"):
                     runner.buffer = ReplayBuffer(args, buffer_dtype)
                 runner.run(i)

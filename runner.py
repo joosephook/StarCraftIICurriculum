@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 
 
 class Runner:
-    def __init__(self, env, args, obs_trans, state_trans):
-        self.env = env
-        self.obs_trans = obs_trans
-        self.state_trans = state_trans
+    def __init__(self, env, args, target_env):
+        self.train_env = env
+        self.target_env = target_env
+
+        self.env = self.train_env
 
         if args.alg.find('commnet') > -1 or args.alg.find('g2anet') > -1:  # communication agent
             self.agents = CommAgents(args)
@@ -43,7 +44,7 @@ class Runner:
             episodes = []
             # 收集self.args.n_episodes个episodes
             for episode_idx in range(self.args.n_episodes):
-                episode, _, _, steps = self.rolloutWorker.generate_episode(episode_idx, obs_trans=self.obs_trans, state_trans=self.state_trans)
+                episode, _, _, steps = self.rolloutWorker.generate_episode(episode_idx)
                 episodes.append(episode)
                 time_steps += steps
                 # print(_)
@@ -72,11 +73,13 @@ class Runner:
     def evaluate(self):
         win_number = 0
         episode_rewards = 0
+        self.rolloutWorker.env = self.target_env
         for epoch in range(self.args.evaluate_epoch):
-            _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True, obs_trans=self.obs_trans, state_trans=self.state_trans)
+            _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True)
             episode_rewards += episode_reward
             if win_tag:
                 win_number += 1
+        self.rolloutWorker.env = self.train_env
         return win_number / self.args.evaluate_epoch, episode_rewards / self.args.evaluate_epoch
 
     def plt(self, num):

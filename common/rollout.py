@@ -20,7 +20,7 @@ class RolloutWorker:
         self.min_epsilon = args.min_epsilon
         print('Init RolloutWorker')
 
-    def generate_episode(self, episode_num=None, evaluate=False, obs_trans=None, state_trans=None):
+    def generate_episode(self, episode_num=None, evaluate=False):
         if self.args.replay_dir != '' and evaluate and episode_num == 0:  # prepare for save replay of evaluation
             self.env.close()
         o, u, r, s, avail_u, u_onehot, terminate, padded = [], [], [], [], [], [], [], []
@@ -50,15 +50,8 @@ class RolloutWorker:
 
         while not terminated and step < self.args.episode_limit:
             # time.sleep(0.2)
-            if obs_trans:
-                obs = [obs_trans.translate(o) for o in self.env.get_obs()]
-            else:
-                obs = self.env.get_obs()
-
-            if state_trans:
-                state = state_trans.translate(self.env.get_state())
-            else:
-                state = self.env.get_state()
+            obs = self.env.get_obs()
+            state = self.env.get_state()
 
             actions, avail_actions, actions_onehot = [], [], []
             for agent_id in range(self.env.n_agents):
@@ -96,15 +89,8 @@ class RolloutWorker:
             if self.args.epsilon_anneal_scale == 'step':
                 epsilon = epsilon - self.anneal_epsilon if epsilon > self.min_epsilon else epsilon
         # last obs
-        if obs_trans:
-            obs = [obs_trans.translate(o) for o in self.env.get_obs()]
-        else:
-            obs = self.env.get_obs()
-
-        if state_trans:
-            state = state_trans.translate(self.env.get_state())
-        else:
-            state = self.env.get_state()
+        obs = self.env.get_obs()
+        state = self.env.get_state()
 
         o.append(obs)
         s.append(state)
