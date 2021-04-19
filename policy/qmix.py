@@ -1,3 +1,5 @@
+import time
+
 import torch
 import os
 from network.base_net import RNN
@@ -166,9 +168,29 @@ class QMIX:
         self.eval_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
         self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
 
+    def load(self, file):
+        state = torch.load(file)
+        self.eval_rnn.load_state_dict(state['eval_rnn'])
+        self.target_rnn.load_state_dict(state['target_rnn'])
+        self.eval_qmix_net.load_state_dict(state['eval_qmix_net'])
+        self.target_qmix_net.load_state_dict(state['target_qmix_net'])
+        self.eval_parameters = list(self.eval_qmix_net.parameters()) + list(self.eval_rnn.parameters())
+        self.optimizer = torch.optim.RMSprop(self.eval_parameters, lr=self.args.lr)
+        self.optimizer.load_state_dict(state['optimizer'])
+
+    def save(self, file):
+        torch.save({
+            'eval_qmix_net': self.eval_qmix_net.state_dict(),
+            'eval_rnn': self.eval_rnn.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'target_qmix_net': self.target_qmix_net.state_dict(),
+            'target_rnn': self.target_rnn.state_dict(),
+        }, file)
+
+
     def save_model(self, train_step):
         num = str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
         torch.save(self.eval_qmix_net.state_dict(), self.model_dir + '/' + num + '_qmix_net_params.pkl')
-        torch.save(self.eval_rnn.state_dict(),  self.model_dir + '/' + num + '_rnn_net_params.pkl')
+        torch.save(self.eval_rnn.state_dict(),  self.model_dir + f'/{int(time.time())}_{num}_rnn_net_params.pkl')

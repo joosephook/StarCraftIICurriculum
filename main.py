@@ -89,7 +89,9 @@ if __name__ == '__main__':
         torch.manual_seed(seed)
 
         map_names = [
-            '3s_vs_3z',
+            '5m_vs_6m',
+            '8m_vs_9m',
+            '10m_vs_11m',
         ]
         envs = [
             StarCraft2Env(map_name=m, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
@@ -97,20 +99,12 @@ if __name__ == '__main__':
             for m in map_names
         ]
         env_timesteps = [
-            200_000,
+            2_000_000,
+            2_000_000,
+            2_000_000,
         ]
-
-        for env in envs:
-            env_info = env.get_env_info()
-            print(env_info)
-
-        curriculum = '->'.join(map_names)
-        buffer_dtype = np.float16
-        experiment_name = f'{timestamp} {curriculum} {buffer_dtype} {args.alg}'
-
-        # assume largest
         target_env = envs[-1]
-        target_env = StarCraft2Env(map_name='3s_vs_5z', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version,
+        target_env = StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version,
                                    replay_dir=args.replay_dir,
                                    seed=seed)
         # change args to accommodate largest possible env
@@ -122,6 +116,16 @@ if __name__ == '__main__':
         args.obs_shape = env_info["obs_shape"]
         # TODO: what to do with episode limit???
         args.episode_limit = env_info["episode_limit"]
+
+        for env in envs:
+            env_info = env.get_env_info()
+            print(env_info)
+
+        curriculum = '->'.join(map_names)
+        buffer_dtype = np.float16
+        experiment_name = f'{timestamp} {curriculum};{target_env.map_name} {buffer_dtype} {args.alg}'
+
+        # assume largest
 
         def create_translators(envs, target_env):
             target_obs_sections   = target_env.get_obs_sections()
@@ -153,6 +157,7 @@ if __name__ == '__main__':
                 runner.rolloutWorker.env = env
                 runner.args.n_steps = env_time
                 runner.args.episode_limit = ep_lim
+                runner.switch = not (env == envs[-1])
                 if new_buffer and hasattr(runner, "buffer"):
                     runner.buffer = ReplayBuffer(args, buffer_dtype)
                 runner.run(i)

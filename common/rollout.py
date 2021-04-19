@@ -48,7 +48,7 @@ class RolloutWorker:
             maven_z = one_hot_categorical.OneHotCategorical(z_prob).sample()
             maven_z = list(maven_z.cpu())
 
-        while not terminated and step < self.args.episode_limit:
+        while not terminated:
             # time.sleep(0.2)
             obs = self.env.get_obs()
             state = self.env.get_state()
