@@ -36,7 +36,7 @@ class Runner:
         self.ratios = []
         self.historical_params = {}
         self.switch = True # we will be switching to some task
-        self.patience = 5
+        self.patience = 10
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -72,8 +72,11 @@ class Runner:
 
                 if self.switch and no_insert > self.patience:
                     best_key = max(self.historical_params)
-                    self.agents.policy.load(self.historical_params[best_key])
-                    break
+                    buf = self.historical_params[best_key]
+                    self.agents.policy.load(buf)
+                    buf.seek(0)
+                    self.agents.policy.save_model(train_step)
+                    return
 
             episodes = []
             # 收集self.args.n_episodes个episodes
