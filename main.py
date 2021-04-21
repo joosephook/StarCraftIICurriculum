@@ -147,20 +147,20 @@ if __name__ == '__main__':
 
         new_buffer = True
         assert len(envs) == len(env_timesteps)
-        episode_limits = [ e.get_env_info()["episode_limit"] for e in envs]
 
         if not args.evaluate:
-            for env, env_time, ep_lim, in zip(
-                envs, env_timesteps, episode_limits
-            ):
+            for env, env_time in zip(envs, env_timesteps):
                 runner.env = env
                 runner.rolloutWorker.env = env
                 runner.args.n_steps = env_time
-                runner.args.episode_limit = ep_lim
-                runner.switch = not (env == envs[-1])
+                runner.args.episode_limit = runner.env.get_env_info()["episode_limit"]
+                runner.switch = env.map_name != envs[-1].map_name
+                runner.switch = False
                 if new_buffer and hasattr(runner, "buffer"):
                     runner.buffer = ReplayBuffer(args, buffer_dtype)
                 runner.run(i)
+                runner.rolloutWorker.epsilon = args.epsilon
+                runner.agents.policy.reset_optimiser()
                 runner.env.close()
 
         else:
