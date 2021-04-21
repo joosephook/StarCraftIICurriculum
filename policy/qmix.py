@@ -57,7 +57,7 @@ class QMIX:
         self.target_hidden = None
         print('Init alg QMIX')
 
-    def learn(self, batch, max_episode_len, train_step, epsilon=None):  # train_step表示是第几次学习，用来控制更新target_net网络的参数
+    def learn(self, batch, max_episode_len, train_step, epsilon=None, step=True):  # train_step表示是第几次学习，用来控制更新target_net网络的参数
         '''
         在learn的时候，抽取到的数据是四维的，四个维度分别为 1——第几个episode 2——episode中第几个transition
         3——第几个agent的数据 4——具体obs维度。因为在选动作时不仅需要输入当前的inputs，还要给神经网络输入hidden_state，
@@ -105,9 +105,11 @@ class QMIX:
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.eval_parameters, self.args.grad_norm_clip)
-        self.optimizer.step()
 
-        if train_step > 0 and train_step % self.args.target_update_cycle == 0:
+        if step:
+            self.optimizer.step()
+
+        if step and train_step > 0 and train_step % self.args.target_update_cycle == 0:
             self.target_rnn.load_state_dict(self.eval_rnn.state_dict())
             self.target_qmix_net.load_state_dict(self.eval_qmix_net.state_dict())
 
