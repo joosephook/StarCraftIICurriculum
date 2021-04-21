@@ -187,10 +187,13 @@ class QMIX:
             'target_rnn': self.target_rnn.state_dict(),
         }, file)
 
+    def reset_optimiser(self):
+        self.eval_parameters = list(self.eval_qmix_net.parameters()) + list(self.eval_rnn.parameters())
+        self.optimizer = torch.optim.RMSprop(self.eval_parameters, lr=self.args.lr)
 
     def save_model(self, train_step):
         num = str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
-        torch.save(self.eval_qmix_net.state_dict(), self.model_dir + '/' + num + '_qmix_net_params.pkl')
+        torch.save(self.eval_qmix_net.state_dict(), self.model_dir + f'/{int(time.time())}_{num}_qmix_net_params.pkl')
         torch.save(self.eval_rnn.state_dict(),  self.model_dir + f'/{int(time.time())}_{num}_rnn_net_params.pkl')
