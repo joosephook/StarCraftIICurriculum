@@ -33,6 +33,9 @@ class QMixNet(nn.Module):
                                      nn.Linear(args.qmix_hidden_dim, 1)
                                      )
 
+        # torch.nn.init.xavier_normal_(self.hyper_w1.weight)
+        # torch.nn.init.xavier_normal_(self.hyper_w2.weight)
+
     def forward(self, q_values, states):  # states的shape为(episode_num, max_episode_len， state_shape)
         # 传入的q_values是三维的，shape为(episode_num, max_episode_len， n_agents)
         episode_num = q_values.size(0)

@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as f
+import torch.nn.init
 
 
 class RNN(nn.Module):
@@ -11,6 +12,10 @@ class RNN(nn.Module):
         self.fc1 = nn.Linear(input_shape, args.rnn_hidden_dim)
         self.rnn = nn.GRUCell(args.rnn_hidden_dim, args.rnn_hidden_dim)
         self.fc2 = nn.Linear(args.rnn_hidden_dim, args.n_actions)
+        # torch.nn.init.xavier_normal_(self.fc1.weight)
+        # torch.nn.init.xavier_normal_(self.fc2.weight)
+        # torch.nn.init.xavier_normal_(self.rnn.weight_hh)
+        # torch.nn.init.xavier_normal_(self.rnn.weight_ih)
 
     def forward(self, obs, hidden_state):
         x = f.relu(self.fc1(obs))
