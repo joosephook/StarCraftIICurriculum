@@ -115,14 +115,14 @@ class Agents:
                     break
         return max_episode_len
 
-    def train(self, batch, train_step, epsilon=None):  # coma needs epsilon for training
+    def train(self, batch, train_step, epsilon=None, step=True):  # coma needs epsilon for training
 
         # different episode has different length, so we need to get max length of the batch
         max_episode_len = self._get_max_episode_len(batch)
         for key in batch.keys():
             if key != 'z':
                 batch[key] = batch[key][:, :max_episode_len]
-        self.policy.learn(batch, max_episode_len, train_step, epsilon)
+        self.policy.learn(batch, max_episode_len, train_step, epsilon, step=step)
         if train_step > 0 and train_step % self.args.save_cycle == 0:
             self.policy.save_model(train_step)
 
