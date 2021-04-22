@@ -89,8 +89,7 @@ if __name__ == '__main__':
         torch.manual_seed(seed)
 
         map_names = [
-            '5m_vs_6m',
-            '8m_vs_9m',
+            # '5m_vs_6m',
             '10m_vs_11m',
         ]
         envs = [
@@ -100,8 +99,7 @@ if __name__ == '__main__':
         ]
         env_timesteps = [
             2_000_000,
-            2_000_000,
-            2_000_000,
+            # 2_000_000,
         ]
         target_env = envs[-1]
         target_env = StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version,

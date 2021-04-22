@@ -36,7 +36,7 @@ class Runner:
         self.ratios = []
         self.historical_params = {}
         self.switch = True # we will be switching to some task
-        self.patience = 10
+        self.patience = 100
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -125,18 +125,18 @@ class Runner:
         plt.figure().set_size_inches(10, 15)
         plt.ylim([0, 105])
         plt.cla()
-        plt.subplot(4, 1, 1)
+        plt.subplot(3, 1, 1)
         plt.plot(range(len(self.win_rates)), self.win_rates)
         plt.xlabel('step*{}'.format(self.args.evaluate_cycle))
         plt.ylabel('win_rates')
 
-        plt.subplot(4, 1, 2)
+        plt.subplot(3, 1, 2)
         plt.plot(range(len(self.episode_rewards)), self.episode_rewards)
         plt.xlabel('step*{}'.format(self.args.evaluate_cycle))
         plt.ylabel('eval_episode_rewards')
 
 
-        plt.subplot(4, 1, 3)
+        plt.subplot(3, 1, 3)
         train_rewards = np.array_split(self.train_rewards,len(self.episode_rewards))
         mean_train_rewards = [np.mean(t) for t in train_rewards]
         plt.plot(range(len((mean_train_rewards))), mean_train_rewards)
@@ -147,20 +147,6 @@ class Runner:
         past_eval = self.train_rewards[-2*self.args.evaluate_epoch:-self.args.evaluate_epoch]
         latest_train = self.train_rewards[-self.args.evaluate_epoch:]
         latest_eval = self.eval_rewards[-self.args.evaluate_epoch:]
-
-        def iqr(data, epsilon=1e-5):
-            # avoid division by zero
-            return np.subtract(*np.percentile(data, [75, 25])) + epsilon
-
-        if len(self.train_rewards) >= 2*self.args.evaluate_epoch and \
-           len(self.eval_rewards) >= 2*self.args.evaluate_epoch:
-            plt.subplot(4, 1, 4)
-            train_iqr_ratio = iqr(latest_train)/iqr(past_train)
-            eval_iqr_ratio = iqr(latest_eval)/iqr(past_eval)
-            self.ratios.append(train_iqr_ratio/eval_iqr_ratio)
-            plt.plot(range(len(self.ratios)), self.ratios)
-            plt.xlabel('step*{}'.format(self.args.evaluate_cycle))
-            plt.ylabel('train_IQR')
 
         plt.tight_layout()
         plt.savefig(self.save_path + '/plt_{}.png'.format(num), format='png')
