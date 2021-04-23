@@ -1,3 +1,5 @@
+import json
+
 from common.replay_buffer import ReplayBuffer
 from runner import Runner
 from smac.env import StarCraft2Env
@@ -6,6 +8,7 @@ from common.arguments import get_common_args, get_coma_args, get_mixer_args, get
 import time
 import os
 import numpy as np
+import logging
 
 class Translator:
     def __init__(self, src, dst):
@@ -47,18 +50,15 @@ class EnvTransWrapper:
 
 
 def save_config(args):
-    with open(__file__, 'r') as f:
-        main = f.readlines()
-    with open('common/arguments.py', 'r') as f:
-        arguments = f.readlines()
-
     if not os.path.isdir(args.save_path):
         os.makedirs(args.save_path)
 
-    with open(args.save_path + f'/{os.path.basename(__file__)}', 'w') as f:
-        f.writelines(main)
-    with open(args.save_path + '/arguments.py', 'w') as f:
-        f.writelines(arguments)
+    with open(args.save_path + f'/{os.path.basename(__file__)}', 'w') as f, open(__file__, 'r') as fin:
+        f.writelines(fin.readlines())
+    with open(args.save_path + '/arguments.py', 'w') as f, open('common/arguments.py', 'r') as fin:
+        f.writelines(fin.readlines())
+    with open(args.save_path + f'/{args.config}', 'w') as f, open(args.config, 'r') as fin:
+        f.writelines(fin.readlines())
 
 if __name__ == '__main__':
     args = get_common_args()
@@ -81,88 +81,89 @@ if __name__ == '__main__':
         assert False, "These algos aren't supported yet (refer to ReplayBuffer)"  # on-policy algorithms, don't utilise the replaybuffer
 
     timestamp = int(time.time())
+    i = args.i
 
-    for i in range(5):
-        import torch
-        seed = 12345+i
-        np.random.seed(seed)
-        torch.manual_seed(seed)
+    import torch
+    seed = 12345+i
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    with open(args.config, 'r') as f:
+        config = json.load(f)
 
-        map_names = [
-            # '5m_vs_6m',
-            '10m_vs_11m',
-        ]
-        envs = [
-            StarCraft2Env(map_name=m, step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version, replay_dir=args.replay_dir,
-                          seed=seed)
-            for m in map_names
-        ]
-        env_timesteps = [
-            2_000_000,
-            # 2_000_000,
-        ]
-        target_env = envs[-1]
-        target_env = StarCraft2Env(map_name='10m_vs_11m', step_mul=args.step_mul, difficulty=args.difficulty, game_version=args.game_version,
-                                   replay_dir=args.replay_dir,
-                                   seed=seed)
-        # change args to accommodate largest possible env
-        # assures the widths of the created neural networks are sufficient
-        env_info = target_env.get_env_info()
-        args.n_actions = env_info["n_actions"]
-        args.n_agents = env_info["n_agents"]
-        args.state_shape = env_info["state_shape"]
-        args.obs_shape = env_info["obs_shape"]
-        # TODO: what to do with episode limit???
-        args.episode_limit = env_info["episode_limit"]
+    assert all(["map_names" in config, "map_timesteps" in config, "target_map" in config]), "Check config file"
+    assert len(config["map_names"]) == len(config["map_timesteps"]), "Check config file"
 
+    envs = [
+        StarCraft2Env(map_name=m,
+                      step_mul=args.step_mul,
+                      difficulty=args.difficulty,
+                      game_version=args.game_version,
+                      replay_dir=args.replay_dir,
+                      seed=seed)
+        for m in config["map_names"]
+    ]
+
+    target_env = StarCraft2Env(map_name=config["target_map"],
+                               step_mul=args.step_mul,
+                               difficulty=args.difficulty,
+                               game_version=args.game_version,
+                               replay_dir=args.replay_dir,
+                               seed=seed)
+    # change args to accommodate largest possible env
+    # assures the widths of the created neural networks are sufficient
+    env_info = target_env.get_env_info()
+    args.n_actions = env_info["n_actions"]
+    args.n_agents = env_info["n_agents"]
+    args.state_shape = env_info["state_shape"]
+    args.obs_shape = env_info["obs_shape"]
+    # TODO: what to do with episode limit???
+    args.episode_limit = env_info["episode_limit"]
+
+    for env in envs:
+        env_info = env.get_env_info()
+        logging.info(env_info)
+
+    curriculum = '->'.join(config["map_names"])
+    buffer_dtype = np.float16
+    experiment_name = f'{timestamp} {curriculum};{target_env.map_name} {buffer_dtype} {args.alg}'
+
+    # assume largest
+
+    def create_translators(envs, target_env):
+        target_obs_sections   = target_env.get_obs_sections()
+        target_state_sections = target_env.get_state_sections()
+
+        wrapped_envs = []
         for env in envs:
-            env_info = env.get_env_info()
-            print(env_info)
+            o_trans = Translator(env.get_obs_sections(), target_obs_sections)
+            s_trans = Translator(env.get_state_sections(), target_state_sections)
+            wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
 
-        curriculum = '->'.join(map_names)
-        buffer_dtype = np.float16
-        experiment_name = f'{timestamp} {curriculum};{target_env.map_name} {buffer_dtype} {args.alg}'
+        return wrapped_envs
 
-        # assume largest
+    envs = create_translators(envs, target_env)
+    args.save_path = os.path.join(args.result_dir, experiment_name, args.alg, str(i))
+    save_config(args)
+    logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.DEBUG)
+    runner = Runner(envs[0], args, target_env)
 
-        def create_translators(envs, target_env):
-            target_obs_sections   = target_env.get_obs_sections()
-            target_state_sections = target_env.get_state_sections()
+    new_buffer = True
+    if new_buffer and hasattr(runner, "buffer"):
+        runner.buffer = ReplayBuffer(args, buffer_dtype)
 
-            wrapped_envs = []
-            for env in envs:
-                o_trans = Translator(env.get_obs_sections(), target_obs_sections)
-                s_trans = Translator(env.get_state_sections(), target_state_sections)
-                wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
+    if not args.evaluate:
+        for env, env_time in zip(envs, config["map_timesteps"]):
+            runner.env = env
+            runner.rolloutWorker.env = env
+            runner.args.n_steps = env_time
+            # runner.args.episode_limit = runner.env.get_env_info()["episode_limit"]
+            runner.switch = env.map_name != envs[-1].map_name
+            runner.run(i)
+            runner.rolloutWorker.epsilon = args.epsilon
+            runner.agents.policy.reset_optimiser()
+            runner.env.close()
 
-            return wrapped_envs
-
-        envs = create_translators(envs, target_env)
-        # TODO: AGENT NUMBER IS BROKEN
-        args.save_path = os.path.join(args.result_dir, experiment_name, args.alg, str(i))
-        save_config(args)
-        runner = Runner(envs[0], args, target_env)
-
-        new_buffer = True
-        assert len(envs) == len(env_timesteps)
-
-        if not args.evaluate:
-            for env, env_time in zip(envs, env_timesteps):
-                runner.env = env
-                runner.rolloutWorker.env = env
-                runner.args.n_steps = env_time
-                runner.args.episode_limit = runner.env.get_env_info()["episode_limit"]
-                runner.switch = env.map_name != envs[-1].map_name
-                runner.switch = False
-                if new_buffer and hasattr(runner, "buffer"):
-                    runner.buffer = ReplayBuffer(args, buffer_dtype)
-                runner.run(i)
-                runner.rolloutWorker.epsilon = args.epsilon
-                runner.agents.policy.reset_optimiser()
-                runner.env.close()
-
-        else:
-            win_rate, _ = runner.evaluate()
-            print('The win rate of {} is  {}'.format(args.alg, win_rate))
-            break
-        env.close()
+    else:
+        win_rate, _ = runner.evaluate()
+        print('The win rate of {} is  {}'.format(args.alg, win_rate))
+    env.close()

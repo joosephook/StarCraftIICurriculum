@@ -33,6 +33,7 @@ def get_common_args():
     parser.add_argument('--evaluate', type=bool, default=False, help='whether to evaluate the model')
     parser.add_argument('--cuda', type=bool, default=False, help='whether to use the GPU')
     parser.add_argument('--i', type=int, required=True, help='experiment i')
+    parser.add_argument('--config', type=str, required=True, help='experiment config')
     args = parser.parse_args()
     return args
 

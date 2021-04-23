@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 import os
 from common.rollout import RolloutWorker, CommRolloutWorker
 from agent.agent import Agents, CommAgents
@@ -44,7 +45,7 @@ class Runner:
         no_insert = 0
 
         while time_steps < self.args.n_steps:
-            print('Run {}, time_steps {}'.format(num, time_steps))
+            logging.info('Run {}, time_steps {}'.format(num, time_steps))
             if time_steps // self.args.evaluate_cycle > evaluate_steps:
                 win_rate, eval_episode_reward = self.evaluate()
                 # print('win_rate is ', win_rate)
@@ -71,6 +72,7 @@ class Runner:
                     no_insert += 1
 
                 if self.switch and no_insert > self.patience:
+                    logging.info("Switching to next task @ {} timesteps".format(time_steps))
                     best_key = max(self.historical_params)
                     buf = self.historical_params[best_key]
                     self.agents.policy.load(buf)
@@ -102,7 +104,6 @@ class Runner:
                     self.agents.train(mini_batch, train_steps)
                     train_steps += 1
         win_rate, episode_reward = self.evaluate()
-        print('win_rate is ', win_rate)
         self.agents.policy.save_model(train_step)
         self.win_rates.append(win_rate)
         self.episode_rewards.append(episode_reward)
