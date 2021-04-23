@@ -62,10 +62,10 @@ class RolloutWorker:
 
                 if self.args.alg == 'maven':
                     action = self.agents.choose_action(obs[agent_id], last_action[agent_id], agent_id,
-                                                       avail_action, epsilon, maven_z, evaluate)
+                                                       avail_action, epsilon, maven_z=maven_z, evaluate=evaluate)
                 else:
                     action = self.agents.choose_action(obs[agent_id], last_action[agent_id], agent_id,
-                                                       avail_action, epsilon, evaluate)
+                                                       avail_action, epsilon, evaluate=evaluate)
                 # generate onehot vector of th action
                 action_onehot = np.zeros(self.args.n_actions)
                 action_onehot[action] = 1

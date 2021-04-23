@@ -13,8 +13,6 @@ class Runner:
         self.train_env = env
         self.target_env = target_env
 
-        self.env = self.train_env
-
         if args.alg.find('commnet') > -1 or args.alg.find('g2anet') > -1:  # communication agent
             self.agents = CommAgents(args)
             self.rolloutWorker = CommRolloutWorker(env, self.agents, args)
@@ -37,7 +35,7 @@ class Runner:
         self.ratios = []
         self.historical_params = {}
         self.switch = True # we will be switching to some task
-        self.patience = 10
+        self.patience = 20
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -45,9 +43,8 @@ class Runner:
         no_improvement = 0
 
         while True:
-            logging.info('Run {}, time_steps {}'.format(num, time_steps))
             if time_steps // self.args.evaluate_cycle > evaluate_steps:
-                win_rate, eval_episode_reward = self.evaluate()
+                win_rate, eval_episode_reward = self.evaluate(num)
                 # print('win_rate is ', win_rate)
                 self.win_rates.append(win_rate)
                 self.eval_episode_rewards.append(eval_episode_reward)
@@ -83,6 +80,8 @@ class Runner:
                     return
 
             if time_steps >= self.args.n_steps:
+                self.agents.policy.save_model(train_step)
+                self.plt(num)
                 break
 
             episodes = []
@@ -92,6 +91,8 @@ class Runner:
                 self.train_rewards.append(train_episode_reward)
                 episodes.append(episode)
                 time_steps += steps
+
+            logging.info('Run {}, time_steps {}, train_episode_reward {}'.format(num, time_steps, train_episode_reward))
                 # print(_)
             # episode的每一项都是一个(1, episode_len, n_agents, 具体维度)四维数组，下面要把所有episode的的obs拼在一起
             episode_batch = episodes[0]
@@ -108,23 +109,21 @@ class Runner:
                     mini_batch = self.buffer.sample(min(self.buffer.current_size, self.args.batch_size))
                     self.agents.train(mini_batch, train_steps)
                     train_steps += 1
-        win_rate, episode_reward = self.evaluate()
-        self.agents.policy.save_model(train_step)
-        self.win_rates.append(win_rate)
-        self.eval_episode_rewards.append(episode_reward)
-        self.plt(num)
 
-    def evaluate(self):
+    def evaluate(self, num):
         win_number = 0
         episode_rewards = 0
         self.rolloutWorker.env = self.target_env
+        logging.info("Evaluating in map {}".format(self.rolloutWorker.env.map_name))
         for epoch in range(self.args.evaluate_epoch):
             _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True)
+            logging.info('Run {}, eval_epoch {}, eval_episode_reward {}'.format(num, epoch, episode_reward))
             episode_rewards += episode_reward
             self.eval_rewards.append(episode_reward)
             if win_tag:
                 win_number += 1
         self.rolloutWorker.env = self.train_env
+        logging.info("Restoring map {}".format(self.rolloutWorker.env.map_name))
         return win_number / self.args.evaluate_epoch, episode_rewards / self.args.evaluate_epoch
 
     def plt(self, num):

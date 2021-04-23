@@ -153,15 +153,14 @@ if __name__ == '__main__':
 
     if not args.evaluate:
         for env, env_time in zip(envs, config["map_timesteps"]):
-            runner.env = env
-            runner.rolloutWorker.env = env
+            runner.train_env = env
             runner.args.n_steps = env_time
             # runner.args.episode_limit = runner.env.get_env_info()["episode_limit"]
             runner.switch = env.map_name != envs[-1].map_name
             runner.run(i)
             runner.rolloutWorker.epsilon = args.epsilon
             runner.agents.policy.reset_optimiser()
-            runner.env.close()
+            runner.train_env.close()
 
     else:
         win_rate, _ = runner.evaluate()
