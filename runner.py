@@ -25,7 +25,7 @@ class Runner:
             self.buffer = None
         self.args = args
         self.win_rates = []
-        self.episode_rewards = []
+        self.eval_episode_rewards = []
 
         # 用来保存plt和pkl
         self.save_path = args.save_path
@@ -37,41 +37,43 @@ class Runner:
         self.ratios = []
         self.historical_params = {}
         self.switch = True # we will be switching to some task
-        self.patience = 100
+        self.patience = 10
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
 
-        no_insert = 0
+        no_improvement = 0
 
-        while time_steps < self.args.n_steps:
+        while True:
             logging.info('Run {}, time_steps {}'.format(num, time_steps))
             if time_steps // self.args.evaluate_cycle > evaluate_steps:
                 win_rate, eval_episode_reward = self.evaluate()
                 # print('win_rate is ', win_rate)
                 self.win_rates.append(win_rate)
-                self.episode_rewards.append(eval_episode_reward)
+                self.eval_episode_rewards.append(eval_episode_reward)
                 self.plt(num)
                 evaluate_steps += 1
 
                 key = int(eval_episode_reward)
                 if self.switch and len(self.historical_params) == 0:
+                    logging.info("First params eval perf @ {} timesteps: {}".format(time_steps, key))
                     # save weights when empty
                     buf = io.BytesIO()
                     self.agents.policy.save(buf)
                     buf.seek(0)
                     self.historical_params[key] = buf
                 elif self.switch and key > max(self.historical_params):
+                    logging.info("New best eval perf @ {} timesteps: {}".format(time_steps, key))
                     # save weights when get better performance
                     buf = io.BytesIO()
                     self.agents.policy.save(buf)
                     buf.seek(0)
                     self.historical_params[key] = buf
-                    no_insert = 0
-                elif self.switch:
-                    no_insert += 1
-
-                if self.switch and no_insert > self.patience:
+                    no_improvement = 0
+                elif self.switch and no_improvement < self.patience:
+                    no_improvement += 1
+                    logging.info("No improvement: {}".format(no_improvement))
+                elif self.switch and no_improvement >= self.patience:
                     logging.info("Switching to next task @ {} timesteps".format(time_steps))
                     best_key = max(self.historical_params)
                     buf = self.historical_params[best_key]
@@ -79,6 +81,9 @@ class Runner:
                     buf.seek(0)
                     self.agents.policy.save_model(train_step)
                     return
+
+            if time_steps >= self.args.n_steps:
+                break
 
             episodes = []
             # 收集self.args.n_episodes个episodes
@@ -106,7 +111,7 @@ class Runner:
         win_rate, episode_reward = self.evaluate()
         self.agents.policy.save_model(train_step)
         self.win_rates.append(win_rate)
-        self.episode_rewards.append(episode_reward)
+        self.eval_episode_rewards.append(episode_reward)
         self.plt(num)
 
     def evaluate(self):
@@ -132,27 +137,23 @@ class Runner:
         plt.ylabel('win_rates')
 
         plt.subplot(3, 1, 2)
-        plt.plot(range(len(self.episode_rewards)), self.episode_rewards)
+        plt.plot(range(len(self.eval_episode_rewards)), self.eval_episode_rewards)
         plt.xlabel('step*{}'.format(self.args.evaluate_cycle))
         plt.ylabel('eval_episode_rewards')
 
 
         plt.subplot(3, 1, 3)
-        train_rewards = np.array_split(self.train_rewards,len(self.episode_rewards))
+        train_rewards = np.array_split(self.train_rewards, len(self.eval_episode_rewards))
         mean_train_rewards = [np.mean(t) for t in train_rewards]
         plt.plot(range(len((mean_train_rewards))), mean_train_rewards)
         plt.xlabel('step*{}'.format(self.args.evaluate_cycle))
         plt.ylabel('train_episode_rewards')
 
-        past_train = self.train_rewards[-2*self.args.evaluate_epoch:-self.args.evaluate_epoch]
-        past_eval = self.train_rewards[-2*self.args.evaluate_epoch:-self.args.evaluate_epoch]
-        latest_train = self.train_rewards[-self.args.evaluate_epoch:]
-        latest_eval = self.eval_rewards[-self.args.evaluate_epoch:]
-
         plt.tight_layout()
         plt.savefig(self.save_path + '/plt_{}.png'.format(num), format='png')
         np.save(self.save_path + '/win_rates_{}'.format(num), self.win_rates)
-        np.save(self.save_path + '/episode_rewards_{}'.format(num), self.episode_rewards)
+        np.save(self.save_path + '/eval_rewards_{}'.format(num), self.eval_episode_rewards)
+        np.save(self.save_path + '/train_rewards_{}'.format(num), self.train_rewards)
         plt.close()
 
 

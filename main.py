@@ -60,6 +60,19 @@ def save_config(args):
     with open(args.save_path + f'/{args.config}', 'w') as f, open(args.config, 'r') as fin:
         f.writelines(fin.readlines())
 
+def create_translators(envs, target_env):
+    target_obs_sections   = target_env.get_obs_sections()
+    target_state_sections = target_env.get_state_sections()
+
+    wrapped_envs = []
+    for env in envs:
+        o_trans = Translator(env.get_obs_sections(), target_obs_sections)
+        s_trans = Translator(env.get_state_sections(), target_state_sections)
+        wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
+
+    return wrapped_envs
+
+
 if __name__ == '__main__':
     args = get_common_args()
     args.alg = 'qmix'
@@ -93,6 +106,14 @@ if __name__ == '__main__':
     assert all(["map_names" in config, "map_timesteps" in config, "target_map" in config]), "Check config file"
     assert len(config["map_names"]) == len(config["map_timesteps"]), "Check config file"
 
+    curriculum = '->'.join(config["map_names"])
+    buffer_dtype = np.float16
+    experiment_name = f'{timestamp} {curriculum};{config["target_map"]} {buffer_dtype} {args.alg}'
+    conf_name, __ = args.config.split('.')
+    args.save_path = os.path.join(conf_name, experiment_name, args.alg, str(i))
+    save_config(args)
+    logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.INFO)
+
     envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
@@ -109,6 +130,11 @@ if __name__ == '__main__':
                                game_version=args.game_version,
                                replay_dir=args.replay_dir,
                                seed=seed)
+
+    for env in envs:
+        env_info = env.get_env_info()
+        logging.info(env_info)
+
     # change args to accommodate largest possible env
     # assures the widths of the created neural networks are sufficient
     env_info = target_env.get_env_info()
@@ -116,35 +142,9 @@ if __name__ == '__main__':
     args.n_agents = env_info["n_agents"]
     args.state_shape = env_info["state_shape"]
     args.obs_shape = env_info["obs_shape"]
-    # TODO: what to do with episode limit???
     args.episode_limit = env_info["episode_limit"]
 
-    for env in envs:
-        env_info = env.get_env_info()
-        logging.info(env_info)
-
-    curriculum = '->'.join(config["map_names"])
-    buffer_dtype = np.float16
-    experiment_name = f'{timestamp} {curriculum};{target_env.map_name} {buffer_dtype} {args.alg}'
-
-    # assume largest
-
-    def create_translators(envs, target_env):
-        target_obs_sections   = target_env.get_obs_sections()
-        target_state_sections = target_env.get_state_sections()
-
-        wrapped_envs = []
-        for env in envs:
-            o_trans = Translator(env.get_obs_sections(), target_obs_sections)
-            s_trans = Translator(env.get_state_sections(), target_state_sections)
-            wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
-
-        return wrapped_envs
-
     envs = create_translators(envs, target_env)
-    args.save_path = os.path.join(args.result_dir, experiment_name, args.alg, str(i))
-    save_config(args)
-    logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.DEBUG)
     runner = Runner(envs[0], args, target_env)
 
     new_buffer = True
