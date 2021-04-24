@@ -148,15 +148,15 @@ if __name__ == '__main__':
     runner = Runner(envs[0], args, target_env)
 
     new_buffer = True
-    if new_buffer and hasattr(runner, "buffer"):
-        runner.buffer = ReplayBuffer(args, buffer_dtype)
-
     if not args.evaluate:
         for env, env_time in zip(envs, config["map_timesteps"]):
             runner.train_env = env
             runner.args.n_steps = env_time
-            # runner.args.episode_limit = runner.env.get_env_info()["episode_limit"]
+            args.episode_limit = env.get_env_info()["episode_limit"]
             runner.switch = env.map_name != envs[-1].map_name
+            if new_buffer and hasattr(runner, "buffer"):
+                runner.buffer = ReplayBuffer(args, buffer_dtype)
+
             runner.run(i)
             runner.rolloutWorker.epsilon = args.epsilon
             runner.agents.policy.reset_optimiser()
