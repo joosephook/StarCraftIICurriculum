@@ -193,6 +193,10 @@ class QMIX:
         self.eval_parameters = list(self.eval_qmix_net.parameters()) + list(self.eval_rnn.parameters())
         self.optimizer = torch.optim.RMSprop(self.eval_parameters, lr=self.args.lr)
 
+    def load_target(self):
+        self.target_rnn.load_state_dict(self.eval_rnn.state_dict())
+        self.target_qmix_net.load_state_dict(self.eval_qmix_net.state_dict())
+
     def save_model(self, train_step):
         num = str(train_step // self.args.save_cycle)
         if not os.path.exists(self.model_dir):
