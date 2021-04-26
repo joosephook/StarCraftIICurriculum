@@ -1,0 +1,11 @@
+{
+  "map_names": [
+    "3s_vs_3z",
+    "3s_vs_5z"
+  ],
+  "map_timesteps": [
+    2000000,
+    2000000
+  ],
+  "target_map":"3s_vs_5z"
+}
