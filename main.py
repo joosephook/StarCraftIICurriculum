@@ -1,5 +1,7 @@
 import json
 
+from torch.utils.tensorboard import SummaryWriter
+
 from common.replay_buffer import ReplayBuffer
 from runner import Runner
 from smac.env import StarCraft2Env
@@ -152,6 +154,7 @@ if __name__ == '__main__':
         for env, env_time in zip(envs, config["map_timesteps"]):
             runner.train_env = env
             runner.args.n_steps = env_time
+            runner.writer = SummaryWriter(os.path.join(args.save_path, env.map_name))
             args.episode_limit = env.get_env_info()["episode_limit"]
             runner.switch = env.map_name != envs[-1].map_name
             if new_buffer and hasattr(runner, "buffer"):

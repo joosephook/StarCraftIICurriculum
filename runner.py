@@ -1,6 +1,9 @@
 import numpy as np
 import logging
 import os
+
+from torch.utils.tensorboard import SummaryWriter
+
 from common.rollout import RolloutWorker, CommRolloutWorker
 from agent.agent import Agents, CommAgents
 from common.replay_buffer import ReplayBuffer
@@ -36,6 +39,7 @@ class Runner:
         self.historical_params = {}
         self.switch = True # we will be switching to some task
         self.patience = 20
+        self.writer: SummaryWriter = None
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -44,7 +48,7 @@ class Runner:
 
         while True:
             if time_steps // self.args.evaluate_cycle > evaluate_steps:
-                win_rate, eval_episode_reward = self.evaluate(num)
+                win_rate, eval_episode_reward = self.evaluate(num, time_steps)
                 # print('win_rate is ', win_rate)
                 self.win_rates.append(win_rate)
                 self.eval_episode_rewards.append(eval_episode_reward)
@@ -110,7 +114,16 @@ class Runner:
                     self.agents.train(mini_batch, train_steps)
                     train_steps += 1
 
-    def evaluate(self, num):
+            self.writer.add_scalar('Reward/train', train_episode_reward, global_step=time_steps)
+            for n, p in self.agents.policy.eval_rnn.named_parameters():
+                self.writer.add_scalar(f'eval_rnn/{n}/norm', p.norm(), global_step=time_steps)
+                self.writer.add_scalar(f'eval_rnn/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
+
+            for n, p in self.agents.policy.eval_qmix_net.named_parameters():
+                self.writer.add_scalar(f'eval_qmix_net/{n}/norm', p.norm(), global_step=time_steps)
+                self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
+
+    def evaluate(self, num, time_steps):
         win_number = 0
         episode_rewards = 0
         self.rolloutWorker.env = self.target_env
@@ -120,6 +133,7 @@ class Runner:
             logging.info('Run {}, eval_epoch {}, eval_episode_reward {}'.format(num, epoch, episode_reward))
             episode_rewards += episode_reward
             self.eval_rewards.append(episode_reward)
+            self.writer.add_scalar('Reward/eval', episode_reward, time_steps + epoch)
             if win_tag:
                 win_number += 1
         self.rolloutWorker.env = self.train_env
