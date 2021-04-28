@@ -1,0 +1,9 @@
+{
+  "map_names": [
+    "5m_vs_6m"
+  ],
+  "map_timesteps": [
+    500000
+  ],
+  "target_map":"10m_vs_11m"
+}
