@@ -116,14 +116,20 @@ if __name__ == '__main__':
     save_config(args)
     logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.INFO)
 
+    if config.get("difficulties"):
+        difficulties =  config["difficulties"]
+    else:
+        difficulties = [args.difficulty]*len(config["map_names"])
+
     envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
-                      difficulty=args.difficulty,
+                      difficulty=d,
                       game_version=args.game_version,
                       replay_dir=args.replay_dir,
                       seed=seed)
-        for m in config["map_names"]
+
+        for m, d in zip(config["map_names"], difficulties)
     ]
 
     target_env = StarCraft2Env(map_name=config["target_map"],
