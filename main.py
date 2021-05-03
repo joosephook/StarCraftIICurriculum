@@ -52,6 +52,8 @@ class EnvTransWrapper:
 
 
 def save_config(args):
+    import shutil
+
     if not os.path.isdir(args.save_path):
         os.makedirs(args.save_path)
 
@@ -61,6 +63,12 @@ def save_config(args):
         f.writelines(fin.readlines())
     with open(args.save_path + f'/{args.config}', 'w') as f, open(args.config, 'r') as fin:
         f.writelines(fin.readlines())
+
+    for f in 'common network agent policy'.split():
+        shutil.copytree(f, os.path.join(args.save_path, f))
+    for f in 'main.py runner.py'.split():
+        shutil.copy(f, os.path.join(args.save_path, f))
+
 
 def create_translators(envs, target_env):
     target_obs_sections   = target_env.get_obs_sections()
