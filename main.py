@@ -12,44 +12,6 @@ import os
 import numpy as np
 import logging
 
-class Translator:
-    def __init__(self, src, dst):
-        assert len(src) == len(dst), f"Source and destination have different number of sections, {len(src)} vs {len(dst)}"
-        self.src = src
-        self.dst = dst
-
-    def translate(self, vec):
-        dst = np.zeros(self.dst[-1])
-
-        for i in range(len(self.dst) - 1):
-            width = self.src[i + 1] - self.src[i]
-            dst[self.dst[i]:self.dst[i] + width] = vec[self.src[i]: self.src[i + 1]]
-
-        return dst
-
-
-class EnvTransWrapper:
-    def __init__(self, env, obs_trans, state_trans):
-        self.env = env
-        self.obs_trans = obs_trans
-        self.state_trans = state_trans
-
-    def __getattr__(self, item):
-        if item == 'get_obs':
-            return self.wrap_get_obs
-        elif item == 'get_state':
-            return self.wrap_get_state
-        else:
-            return getattr(self.env, item)
-
-    def wrap_get_obs(self):
-        observations = [self.obs_trans.translate(o) for o in self.env.get_obs()]
-        return observations
-
-    def wrap_get_state(self):
-        state = self.state_trans.translate(self.env.get_state())
-        return state
-
 
 def save_config(args):
     import shutil
@@ -68,19 +30,6 @@ def save_config(args):
         shutil.copytree(f, os.path.join(args.save_path, f))
     for f in 'main.py runner.py'.split():
         shutil.copy(f, os.path.join(args.save_path, f))
-
-
-def create_translators(envs, target_env):
-    target_obs_sections   = target_env.get_obs_sections()
-    target_state_sections = target_env.get_state_sections()
-
-    wrapped_envs = []
-    for env in envs:
-        o_trans = Translator(env.get_obs_sections(), target_obs_sections)
-        s_trans = Translator(env.get_state_sections(), target_state_sections)
-        wrapped_envs.append(EnvTransWrapper(env, o_trans, s_trans))
-
-    return wrapped_envs
 
 
 if __name__ == '__main__':
@@ -129,23 +78,27 @@ if __name__ == '__main__':
     else:
         difficulties = [args.difficulty]*len(config["map_names"])
 
+    target_env = StarCraft2Env(map_name=config["target_map"],
+                               step_mul=args.step_mul,
+                               difficulty=args.difficulty,
+                               game_version=args.game_version,
+                               replay_dir=args.replay_dir,
+                               seed=seed,
+                               obs_instead_of_state=True)
     envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
                       difficulty=d,
                       game_version=args.game_version,
                       replay_dir=args.replay_dir,
-                      seed=seed)
+                      seed=seed,
+                      pad_agents=target_env.n_agents,
+                      pad_enemies=target_env.n_enemies,
+                      obs_instead_of_state=True,
+                      )
 
         for m, d in zip(config["map_names"], difficulties)
     ]
-
-    target_env = StarCraft2Env(map_name=config["target_map"],
-                               step_mul=args.step_mul,
-                               difficulty=args.difficulty,
-                               game_version=args.game_version,
-                               replay_dir=args.replay_dir,
-                               seed=seed)
 
     for env in envs:
         env_info = env.get_env_info()
@@ -160,7 +113,6 @@ if __name__ == '__main__':
     args.obs_shape = env_info["obs_shape"]
     args.episode_limit = env_info["episode_limit"]
 
-    envs = create_translators(envs, target_env)
     runner = Runner(envs[0], args, target_env)
 
     new_buffer = True
@@ -173,7 +125,6 @@ if __name__ == '__main__':
             runner.switch = env.map_name != envs[-1].map_name
             if new_buffer and hasattr(runner, "buffer"):
                 runner.buffer = ReplayBuffer(args, buffer_dtype)
-
             runner.run(i)
             runner.agents.policy.reset_optimiser()
             runner.agents.policy.load_target()
