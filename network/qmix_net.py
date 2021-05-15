@@ -39,13 +39,14 @@ class QMixNet(nn.Module):
     def forward(self, q_values, states):  # states的shape为(episode_num, max_episode_len， state_shape)
         # 传入的q_values是三维的，shape为(episode_num, max_episode_len， n_agents)
         episode_num = q_values.size(0)
-        q_values = q_values.view(-1, 1, self.args.n_agents)  # (episode_num * max_episode_len, 1, n_agents) = (1920,1,5)
+        episode_num, max_len, n_agents = q_values.shape
+        q_values = q_values.view(-1, 1, n_agents)  # (episode_num * max_episode_len, 1, n_agents) = (1920,1,5)
         states = states.reshape(-1, self.args.state_shape)  # (episode_num * max_episode_len, state_shape)
 
         w1 = torch.abs(self.hyper_w1(states))  # (1920, 160)
         b1 = self.hyper_b1(states)  # (1920, 32)
 
-        w1 = w1.view(-1, self.args.n_agents, self.args.qmix_hidden_dim)  # (1920, 5, 32)
+        w1 = w1.view(-1, self.args.n_agents, self.args.qmix_hidden_dim)[:, :n_agents, :]  # (1920, 5, 32)
         b1 = b1.view(-1, 1, self.args.qmix_hidden_dim)  # (1920, 1, 32)
 
         hidden = F.elu(torch.bmm(q_values, w1) + b1)  # (1920, 1, 32)

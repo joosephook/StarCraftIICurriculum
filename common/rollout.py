@@ -29,8 +29,8 @@ class RolloutWorker:
         win_tag = False
         step = 0
         episode_reward = 0  # cumulative rewards
-        last_action = np.zeros((self.args.n_agents, self.args.n_actions))
-        self.agents.policy.init_hidden(1)
+        last_action = np.zeros((self.env.n_agents, self.args.n_actions))
+        self.agents.policy.init_hidden(1, self.env.n_agents)
 
         # epsilon
         epsilon = 0 if evaluate else self.epsilon

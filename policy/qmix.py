@@ -64,8 +64,9 @@ class QMIX:
         hidden_state和之前的经验相关，因此就不能随机抽取经验进行学习。所以这里一次抽取多个episode，然后一次给神经网络
         传入每个episode的同一个位置的transition
         '''
-        episode_num = batch['o'].shape[0]
-        self.init_hidden(episode_num)
+        # episode_num, n_agents = batch['o'].shape[0]
+        episode_num, timesteps, n_agents, obs_width = batch['o'].shape
+        self.init_hidden(episode_num, n_agents)
         for key in batch.keys():  # 把batch里的数据转化成tensor
             if key == 'u':
                 batch[key] = torch.tensor(batch[key], dtype=torch.long)
@@ -117,7 +118,7 @@ class QMIX:
         # 取出所有episode上该transition_idx的经验，u_onehot要取出所有，因为要用到上一条
         obs, obs_next, u_onehot = batch['o'][:, transition_idx], \
                                   batch['o_next'][:, transition_idx], batch['u_onehot'][:]
-        episode_num = obs.shape[0]
+        episode_num, n_agents, obs_width = obs.shape
         inputs, inputs_next = [], []
         inputs.append(obs)
         inputs_next.append(obs_next)
@@ -133,16 +134,17 @@ class QMIX:
             # 因为当前的obs三维的数据，每一维分别代表(episode编号，agent编号，obs维度)，直接在dim_1上添加对应的向量
             # 即可，比如给agent_0后面加(1, 0, 0, 0, 0)，表示5个agent中的0号。而agent_0的数据正好在第0行，那么需要加的
             # agent编号恰好就是一个单位矩阵，即对角线为1，其余为0
-            inputs.append(torch.eye(self.args.n_agents).unsqueeze(0).expand(episode_num, -1, -1))
-            inputs_next.append(torch.eye(self.args.n_agents).unsqueeze(0).expand(episode_num, -1, -1))
+            inputs.append(torch.eye(self.args.n_agents)[:n_agents].unsqueeze(0).expand(episode_num, -1, -1))
+            inputs_next.append(torch.eye(self.args.n_agents)[:n_agents].unsqueeze(0).expand(episode_num, -1, -1))
         # 要把obs中的三个拼起来，并且要把episode_num个episode、self.args.n_agents个agent的数据拼成40条(40,96)的数据，
         # 因为这里所有agent共享一个神经网络，每条数据中带上了自己的编号，所以还是自己的数据
-        inputs = torch.cat([x.reshape(episode_num * self.args.n_agents, -1) for x in inputs], dim=1)
-        inputs_next = torch.cat([x.reshape(episode_num * self.args.n_agents, -1) for x in inputs_next], dim=1)
+        inputs = torch.cat([x.reshape(episode_num * n_agents, -1) for x in inputs], dim=1)
+        inputs_next = torch.cat([x.reshape(episode_num * n_agents, -1) for x in inputs_next], dim=1)
         return inputs, inputs_next
 
     def get_q_values(self, batch, max_episode_len):
         episode_num = batch['o'].shape[0]
+        episode_num, _, n_agents, _ = batch['o'].shape
         q_evals, q_targets = [], []
         for transition_idx in range(max_episode_len):
             inputs, inputs_next = self._get_inputs(batch, transition_idx)  # 给obs加last_action、agent_id
@@ -155,8 +157,8 @@ class QMIX:
             q_target, self.target_hidden = self.target_rnn(inputs_next, self.target_hidden)
 
             # 把q_eval维度重新变回(8, 5,n_actions)
-            q_eval = q_eval.view(episode_num, self.n_agents, -1)
-            q_target = q_target.view(episode_num, self.n_agents, -1)
+            q_eval = q_eval.view(episode_num, n_agents, -1)
+            q_target = q_target.view(episode_num, n_agents, -1)
             q_evals.append(q_eval)
             q_targets.append(q_target)
         # 得的q_eval和q_target是一个列表，列表里装着max_episode_len个数组，数组的的维度是(episode个数, n_agents，n_actions)
@@ -165,10 +167,10 @@ class QMIX:
         q_targets = torch.stack(q_targets, dim=1)
         return q_evals, q_targets
 
-    def init_hidden(self, episode_num):
+    def init_hidden(self, episode_num, n_agents):
         # 为每个episode中的每个agent都初始化一个eval_hidden、target_hidden
-        self.eval_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
-        self.target_hidden = torch.zeros((episode_num, self.n_agents, self.args.rnn_hidden_dim))
+        self.eval_hidden = torch.zeros((episode_num, n_agents, self.args.rnn_hidden_dim))
+        self.target_hidden = torch.zeros((episode_num, n_agents, self.args.rnn_hidden_dim))
 
     def load(self, file):
         state = torch.load(file)

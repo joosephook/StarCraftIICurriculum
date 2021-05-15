@@ -106,13 +106,16 @@ class Agents:
     def _get_max_episode_len(self, batch):
         terminated = batch['terminated']
         episode_num = terminated.shape[0]
-        max_episode_len = 0
-        for episode_idx in range(episode_num):
-            for transition_idx in range(self.args.episode_limit):
-                if terminated[episode_idx, transition_idx, 0] == 1:
-                    if transition_idx + 1 >= max_episode_len:
-                        max_episode_len = transition_idx + 1
-                    break
+        # max_episode_len = 0
+        # for episode_idx in range(episode_num):
+        #     for transition_idx in range(self.args.episode_limit):
+        #         if terminated[episode_idx, transition_idx, 0] == 1:
+        #             if transition_idx + 1 >= max_episode_len:
+        #                 max_episode_len = transition_idx + 1
+        #             break
+        ep_lens = np.arange(self.args.episode_limit)+1
+        max_episode_len = np.max(ep_lens[np.max((batch['terminated'].squeeze(-1) == 0), axis=0)])+1
+
         return max_episode_len
 
     def train(self, batch, train_step, epsilon=None, step=True):  # coma needs epsilon for training

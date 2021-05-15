@@ -84,7 +84,7 @@ if __name__ == '__main__':
                                game_version=args.game_version,
                                replay_dir=args.replay_dir,
                                seed=seed,
-                               obs_instead_of_state=True)
+                               )
     envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
@@ -94,7 +94,6 @@ if __name__ == '__main__':
                       seed=seed,
                       pad_agents=target_env.n_agents,
                       pad_enemies=target_env.n_enemies,
-                      obs_instead_of_state=True,
                       )
 
         for m, d in zip(config["map_names"], difficulties)
@@ -123,8 +122,13 @@ if __name__ == '__main__':
             runner.writer = SummaryWriter(os.path.join(args.save_path, env.map_name))
             args.episode_limit = env.get_env_info()["episode_limit"]
             runner.switch = env.map_name != envs[-1].map_name
+
             if new_buffer and hasattr(runner, "buffer"):
+                args.n_agents = env.get_env_info()['n_agents']
+                args.n_agents_current = env.get_env_info()['n_agents']
                 runner.buffer = ReplayBuffer(args, buffer_dtype)
+                args.n_agents = target_env.get_env_info()['n_agents']
+
             runner.run(i)
             runner.agents.policy.reset_optimiser()
             runner.agents.policy.load_target()
