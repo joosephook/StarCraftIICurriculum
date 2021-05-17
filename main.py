@@ -129,6 +129,7 @@ if __name__ == '__main__':
                 runner.buffer = ReplayBuffer(args, buffer_dtype)
                 args.n_agents = target_env.get_env_info()['n_agents']
 
+            runner.patience = 20
             runner.run(i)
             runner.agents.policy.reset_optimiser()
             runner.agents.policy.load_target()
