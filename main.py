@@ -84,6 +84,7 @@ if __name__ == '__main__':
                                game_version=args.game_version,
                                replay_dir=args.replay_dir,
                                seed=seed,
+                               shuffle=False,
                                )
     envs = [
         StarCraft2Env(map_name=m,
@@ -94,6 +95,7 @@ if __name__ == '__main__':
                       seed=seed,
                       pad_agents=target_env.n_agents,
                       pad_enemies=target_env.n_enemies,
+                      shuffle=False,
                       )
 
         for m, d in zip(config["map_names"], difficulties)

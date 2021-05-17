@@ -29,7 +29,7 @@ class RolloutWorker:
         win_tag = False
         step = 0
         episode_reward = 0  # cumulative rewards
-        last_action = np.zeros((self.env.n_agents, self.args.n_actions))
+        last_action = self.env.last_action
         self.agents.policy.init_hidden(1, self.env.n_agents)
 
         # epsilon
@@ -54,17 +54,14 @@ class RolloutWorker:
             state = self.env.get_state()
 
             actions, avail_actions, actions_onehot = [], [], []
-            for agent_id in range(self.env.n_agents):
+            for i, agent_id in enumerate(self.env.agents):
                 avail_action = self.env.get_avail_agent_actions(agent_id)
-                avail_action_mask = np.zeros(self.args.n_actions)
-                avail_action_mask[np.nonzero(avail_action)] = 1.0
-                avail_action = avail_action_mask
 
                 if self.args.alg == 'maven':
-                    action = self.agents.choose_action(obs[agent_id], last_action[agent_id], agent_id,
+                    action = self.agents.choose_action(obs[i], last_action[agent_id], i,
                                                        avail_action, epsilon, maven_z=maven_z, evaluate=evaluate)
                 else:
-                    action = self.agents.choose_action(obs[agent_id], last_action[agent_id], agent_id,
+                    action = self.agents.choose_action(obs[i], last_action[agent_id], i,
                                                        avail_action, epsilon, evaluate=evaluate)
                 # generate onehot vector of th action
                 action_onehot = np.zeros(self.args.n_actions)
@@ -72,7 +69,6 @@ class RolloutWorker:
                 actions.append(action)
                 actions_onehot.append(action_onehot)
                 avail_actions.append(avail_action)
-                last_action[agent_id] = action_onehot
 
             reward, terminated, info = self.env.step(actions)
             win_tag = True if terminated and 'battle_won' in info and info['battle_won'] else False
@@ -100,11 +96,8 @@ class RolloutWorker:
         s = s[:-1]
         # get avail_action for last obs，because target_q needs avail_action in training
         avail_actions = []
-        for agent_id in range(self.env.n_agents):
+        for i, agent_id in enumerate(self.env.agents):
             avail_action = self.env.get_avail_agent_actions(agent_id)
-            avail_action_mask = np.zeros(self.args.n_actions)
-            avail_action_mask[np.nonzero(avail_action)] = 1.0
-            avail_action = avail_action_mask
             avail_actions.append(avail_action)
         avail_u.append(avail_actions)
         avail_u_next = avail_u[1:]
