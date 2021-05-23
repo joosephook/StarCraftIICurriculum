@@ -130,7 +130,6 @@ if __name__ == '__main__':
     runner.eval_envs = eval_envs
 
     new_buffer = True
-    buffer_dtype = np.float16
     if not args.evaluate:
         for env, env_time in zip(train_envs, config["map_timesteps"]):
             runner.train_env = env
@@ -140,10 +139,19 @@ if __name__ == '__main__':
             runner.switch = env.map_name != train_envs[-1].map_name
 
             if new_buffer and hasattr(runner, "buffer"):
-                args.n_agents = env.get_env_info()['n_agents']
-                args.n_agents_current = env.get_env_info()['n_agents']
-                runner.buffer = ReplayBuffer(args, buffer_dtype)
-                args.n_agents = target_env.get_env_info()['n_agents']
+                env_info = env.get_env_info()
+                target_info = target_env.get_env_info()
+                runner.buffer = ReplayBuffer(
+                    n_actions=target_info['n_actions'],
+                    n_agents=env_info['n_agents'],
+                    obs_shape=target_info['obs_shape'],
+                    state_shape=target_info['state_shape'],
+                    episode_limit=env_info['episode_limit'],
+                    size=args.buffer_size,
+                    alg=args.alg,
+                    noise_dim=args.noise_dim,
+                    dtype=np.float16,
+                )
 
             runner.patience = 20
             runner.run(i)

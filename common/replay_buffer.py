@@ -3,14 +3,16 @@ import threading
 
 
 class ReplayBuffer:
-    def __init__(self, args, dtype):
-        self.args = args
-        self.n_actions = self.args.n_actions
-        self.n_agents = self.args.n_agents
-        self.state_shape = self.args.state_shape
-        self.obs_shape = self.args.obs_shape
-        self.size = self.args.buffer_size
-        self.episode_limit = self.args.episode_limit
+    def __init__(self, n_actions=None, n_agents=None, state_shape=None, obs_shape=None, size=None, episode_limit=None, dtype=None, alg=None, noise_dim=None):
+        self.n_actions = n_actions
+        self.n_agents = n_agents
+        self.state_shape = state_shape
+        self.obs_shape = obs_shape
+        self.size = size
+        self.episode_limit = episode_limit
+        self.alg = alg
+        self.noise_dim = noise_dim
+
         # memory management
         self.current_idx = 0
         self.current_size = 0
@@ -52,8 +54,8 @@ class ReplayBuffer:
         print("Buffers would consume", bytes/(1024*1024*1024), "GiB of memory.")
 
 
-        if self.args.alg == 'maven':
-            self.buffers['z'] = np.empty([self.size, self.args.noise_dim], dtype=dtype)
+        if self.alg == 'maven':
+            self.buffers['z'] = np.empty([self.size, self.noise_dim], dtype=dtype)
         # thread lock
         self.lock = threading.Lock()
 
@@ -76,7 +78,7 @@ class ReplayBuffer:
             self.buffers['u_onehot'][idxs, :, :n_agents, :n_actions] = episode_batch['u_onehot']
             self.buffers['padded'][idxs] = episode_batch['padded']
             self.buffers['terminated'][idxs] = episode_batch['terminated']
-            if self.args.alg == 'maven':
+            if self.alg == 'maven':
                 self.buffers['z'][idxs] = episode_batch['z']
 
     def sample(self, batch_size):

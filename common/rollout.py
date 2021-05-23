@@ -64,7 +64,7 @@ class RolloutWorker:
                     action = self.agents.choose_action(obs[i], last_action[agent_id], i,
                                                        avail_action, epsilon, evaluate=evaluate)
                 # generate onehot vector of th action
-                action_onehot = np.zeros(self.args.n_actions)
+                action_onehot = np.zeros(self.env.n_actions)
                 action_onehot[action] = 1
                 actions.append(action)
                 actions_onehot.append(action_onehot)
@@ -104,16 +104,16 @@ class RolloutWorker:
         avail_u = avail_u[:-1]
 
         # if step < self.episode_limit，padding
-        for i in range(step, self.args.episode_limit):
+        for i in range(step, self.env.episode_limit):
             o.append(np.zeros((self.env.n_agents, self.obs_shape)))
             u.append(np.zeros([self.env.n_agents, 1]))
             s.append(np.zeros(self.state_shape))
             r.append([0.])
             o_next.append(np.zeros((self.env.n_agents, self.obs_shape)))
             s_next.append(np.zeros(self.state_shape))
-            u_onehot.append(np.zeros((self.env.n_agents, self.n_actions)))
-            avail_u.append(np.zeros((self.env.n_agents, self.n_actions)))
-            avail_u_next.append(np.zeros((self.env.n_agents, self.n_actions)))
+            u_onehot.append(np.zeros((self.env.n_agents, self.env.n_actions)))
+            avail_u.append(np.zeros((self.env.n_agents, self.env.n_actions)))
+            avail_u_next.append(np.zeros((self.env.n_agents, self.env.n_actions)))
             padded.append([1.])
             terminate.append([1.])
 
