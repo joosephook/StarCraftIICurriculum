@@ -133,6 +133,7 @@ if __name__ == '__main__':
 
             runner.patience = 20
             runner.run(i)
+            runner.rolloutWorker.epsilon = args.epsilon
             runner.agents.policy.reset_optimiser()
             runner.agents.policy.load_target()
             runner.train_env.close()
