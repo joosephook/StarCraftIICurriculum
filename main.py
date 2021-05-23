@@ -1,4 +1,6 @@
+import io
 import json
+from typing import Dict, List, Tuple
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -30,6 +32,91 @@ def save_config(args):
         shutil.copytree(f, os.path.join(args.save_path, f))
     for f in 'main.py runner.py'.split():
         shutil.copy(f, os.path.join(args.save_path, f))
+
+
+class TrainEnvs:
+    def __init__(self, envs: List[Tuple[StarCraft2Env, int]], p=None):
+        self.envs = envs
+        self.p = p
+        if p:
+            assert len(p) == len(envs), "Need prob for each env"
+            assert np.sum(p) == 1.0, "Probs must sum to 1"
+            self.p = np.array(p)
+        self.rng = np.random.default_rng(0)
+
+    def get(self):
+        keep = [
+            i
+            for i, (env, max_steps) in enumerate(self.envs)
+            if env.total_steps < max_steps
+        ]
+        if self.p:
+            self.p = np.array([self.p[i] for i in keep])
+            self.p /= np.sum(self.p) # normalise remaining probs
+
+        self.envs = [self.envs[i] for i in keep]
+
+        if not len(self.envs):
+            raise IndexError("No more envs")
+        if self.p:
+            idx = self.rng.choice(np.arange(len(self.envs)), 1, p=self.p)
+            return self.envs[idx]
+        else:
+            return self.envs[0]
+
+class ForwardCurriculum:
+    def __init__(self, envs: List[Tuple[StarCraft2Env, int]], patience, switch_callback):
+        self.envs = envs
+        self._patience = patience
+        self.patience = patience
+        self.current_env = None
+        self.current_max_steps = None
+        self.historical_params = None
+        self.no_improvement = None
+        self.switch_callback = switch_callback
+        self.next()
+
+    def get(self):
+        if self.current_env.total_steps >= self.current_max_steps:
+            self.next()
+        return self.current_env
+
+    def next(self):
+        if self.current_env:
+            self.current_env.close()
+        self.current_env, self.current_max_steps = self.envs.pop(0)
+        self.historical_params = {}
+        self.no_improvement = 0
+        self.switch_callback()
+
+    def update(self, performance, agents, time_steps, train_steps):
+        if self.current_env.switch:
+            if len(self.historical_params) == 0:
+                logging.info("First params eval perf @ {} timesteps: {}".format(time_steps, performance))
+                # save weights when empty
+                buf = io.BytesIO()
+                agents.policy.save(buf)
+                buf.seek(0)
+                self.historical_params[performance] = buf
+            elif performance > max(self.historical_params):
+                logging.info("New best eval perf @ {} timesteps: {}".format(time_steps, performance))
+                # save weights when get better performance
+                buf = io.BytesIO()
+                agents.policy.save(buf)
+                buf.seek(0)
+                self.historical_params[performance] = buf
+                self.no_improvement = 0
+            elif self.no_improvement < self.patience:
+                self.no_improvement += 1
+                logging.info("No improvement: {}".format(self.no_improvement))
+            elif self.no_improvement >= self.patience:
+                logging.info("Switching to next task @ {} timesteps".format(time_steps))
+                best_key = max(self.historical_params)
+                buf = self.historical_params[best_key]
+                agents.policy.load(buf)
+                buf.seek(0)
+                agents.policy.save_model(train_steps)
+                self.next()
 
 
 if __name__ == '__main__':
@@ -115,8 +202,21 @@ if __name__ == '__main__':
 
     for env in train_envs:
         env_info = env.get_env_info()
+        target_info = target_env.get_env_info()
+        env.buffer = ReplayBuffer(
+            n_actions=target_info['n_actions'],
+            n_agents=env_info['n_agents'],
+            obs_shape=target_info['obs_shape'],
+            state_shape=target_info['state_shape'],
+            episode_limit=env_info['episode_limit'],
+            size=args.buffer_size,
+            alg=args.alg,
+            noise_dim=args.noise_dim,
+            dtype=np.float16,
+        )
+        env.switch = env.map_name != train_envs[-1].map_name and not config.get("probs")
+        env.patience = 20
         logging.info(env_info)
-
     # change args to accommodate largest possible env
     # assures the widths of the created neural networks are sufficient
     env_info = target_env.get_env_info()
@@ -126,40 +226,26 @@ if __name__ == '__main__':
     args.obs_shape = env_info["obs_shape"]
     args.episode_limit = env_info["episode_limit"]
 
-    runner = Runner(train_envs[0], args, target_env)
+    runner = Runner(None, args, target_env)
+
+    def switch_callback():
+        runner.rolloutWorker.epsilon = args.epsilon
+        runner.agents.policy.reset_optimiser()
+        runner.agents.policy.load_target()
+
+    curriculum = ForwardCurriculum(
+        [
+            (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
+        ],
+        patience=20,
+        switch_callback=switch_callback
+    )
+    runner.curriculum = curriculum
     runner.eval_envs = eval_envs
+    runner.writer = SummaryWriter(args.save_path)
 
-    new_buffer = True
     if not args.evaluate:
-        for env, env_time in zip(train_envs, config["map_timesteps"]):
-            runner.train_env = env
-            runner.args.n_steps = env_time
-            runner.writer = SummaryWriter(os.path.join(args.save_path, env.map_name))
-            args.episode_limit = env.get_env_info()["episode_limit"]
-            runner.switch = env.map_name != train_envs[-1].map_name
-
-            if new_buffer and hasattr(runner, "buffer"):
-                env_info = env.get_env_info()
-                target_info = target_env.get_env_info()
-                runner.buffer = ReplayBuffer(
-                    n_actions=target_info['n_actions'],
-                    n_agents=env_info['n_agents'],
-                    obs_shape=target_info['obs_shape'],
-                    state_shape=target_info['state_shape'],
-                    episode_limit=env_info['episode_limit'],
-                    size=args.buffer_size,
-                    alg=args.alg,
-                    noise_dim=args.noise_dim,
-                    dtype=np.float16,
-                )
-
-            runner.patience = 20
-            runner.run(i)
-            runner.rolloutWorker.epsilon = args.epsilon
-            runner.agents.policy.reset_optimiser()
-            runner.agents.policy.load_target()
-            runner.train_env.close()
-
+        runner.run()
     else:
         win_rate, _ = runner.evaluate()
         print('The win rate of {} is  {}'.format(args.alg, win_rate))
