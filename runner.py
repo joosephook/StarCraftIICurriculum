@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 import logging
 import os
@@ -34,12 +36,12 @@ class Runner:
             os.makedirs(self.save_path)
 
         self.train_rewards = []
-        self.eval_rewards  = []
         self.ratios = []
         self.historical_params = {}
         self.switch = True # we will be switching to some task
         self.patience = 20
         self.writer: SummaryWriter = None
+        self.eval_envs = None
 
     def run(self, num):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -48,7 +50,7 @@ class Runner:
 
         while True:
             if time_steps // self.args.evaluate_cycle > evaluate_steps:
-                win_rate, eval_episode_reward = self.evaluate(num, time_steps)
+                win_rate, eval_episode_reward = self.evaluate(num, time_steps, self.target_env)
                 # print('win_rate is ', win_rate)
                 self.win_rates.append(win_rate)
                 self.eval_episode_rewards.append(eval_episode_reward)
@@ -56,32 +58,38 @@ class Runner:
                 evaluate_steps += 1
 
                 key = int(eval_episode_reward)
-                if self.switch and len(self.historical_params) == 0:
-                    logging.info("First params eval perf @ {} timesteps: {}".format(time_steps, key))
-                    # save weights when empty
-                    buf = io.BytesIO()
-                    self.agents.policy.save(buf)
-                    buf.seek(0)
-                    self.historical_params[key] = buf
-                elif self.switch and key > max(self.historical_params):
-                    logging.info("New best eval perf @ {} timesteps: {}".format(time_steps, key))
-                    # save weights when get better performance
-                    buf = io.BytesIO()
-                    self.agents.policy.save(buf)
-                    buf.seek(0)
-                    self.historical_params[key] = buf
-                    no_improvement = 0
-                elif self.switch and no_improvement < self.patience:
-                    no_improvement += 1
-                    logging.info("No improvement: {}".format(no_improvement))
-                elif self.switch and no_improvement >= self.patience:
-                    logging.info("Switching to next task @ {} timesteps".format(time_steps))
-                    best_key = max(self.historical_params)
-                    buf = self.historical_params[best_key]
-                    self.agents.policy.load(buf)
-                    buf.seek(0)
-                    self.agents.policy.save_model(train_step)
-                    return
+                if self.switch:
+                    if self.switch and len(self.historical_params) == 0:
+                        logging.info("First params eval perf @ {} timesteps: {}".format(time_steps, key))
+                        # save weights when empty
+                        buf = io.BytesIO()
+                        self.agents.policy.save(buf)
+                        buf.seek(0)
+                        self.historical_params[key] = buf
+                    elif self.switch and key > max(self.historical_params):
+                        logging.info("New best eval perf @ {} timesteps: {}".format(time_steps, key))
+                        # save weights when get better performance
+                        buf = io.BytesIO()
+                        self.agents.policy.save(buf)
+                        buf.seek(0)
+                        self.historical_params[key] = buf
+                        no_improvement = 0
+                    elif self.switch and no_improvement < self.patience:
+                        no_improvement += 1
+                        logging.info("No improvement: {}".format(no_improvement))
+                    elif self.switch and no_improvement >= self.patience:
+                        logging.info("Switching to next task @ {} timesteps".format(time_steps))
+                        best_key = max(self.historical_params)
+                        buf = self.historical_params[best_key]
+                        self.agents.policy.load(buf)
+                        buf.seek(0)
+                        self.agents.policy.save_model(train_step)
+                        return
+
+                # eval in other envs
+                for env in self.eval_envs:
+                    self.evaluate(num, time_steps, env)
+
 
             if time_steps >= self.args.n_steps:
                 self.agents.policy.save_model(train_step)
@@ -123,17 +131,17 @@ class Runner:
                 self.writer.add_scalar(f'eval_qmix_net/{n}/norm', p.norm(), global_step=time_steps)
                 self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
 
-    def evaluate(self, num, time_steps):
+    def evaluate(self, num, time_steps, env):
         win_number = 0
         episode_rewards = 0
-        self.rolloutWorker.env = self.target_env
+        # self.rolloutWorker.env = self.target_env
+        self.rolloutWorker.env = env
         logging.info("Evaluating in map {}".format(self.rolloutWorker.env.map_name))
         for epoch in range(self.args.evaluate_epoch):
             _, episode_reward, win_tag, _ = self.rolloutWorker.generate_episode(epoch, evaluate=True)
             logging.info('Run {}, eval_epoch {}, eval_episode_reward {}'.format(num, epoch, episode_reward))
             episode_rewards += episode_reward
-            self.eval_rewards.append(episode_reward)
-            self.writer.add_scalar('Reward/eval', episode_reward, time_steps + epoch)
+            self.writer.add_scalar(f'Reward/eval/{self.rolloutWorker.env.map_name}', episode_reward, time_steps + epoch)
             if win_tag:
                 win_number += 1
         self.rolloutWorker.env = self.train_env

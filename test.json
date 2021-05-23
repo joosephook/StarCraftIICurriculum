@@ -4,8 +4,9 @@
     "10m_vs_11m"
   ],
   "map_timesteps": [
-    2000000,
-    2000000
+    20000,
+    20000
   ],
-  "target_map":"10m_vs_11m"
+  "target_map":"10m_vs_11m",
+  "eval_maps": ["5m_vs_6m", "2m_vs_3m"]
 }

@@ -59,17 +59,16 @@ if __name__ == '__main__':
     seed = 12345+i
     np.random.seed(seed)
     torch.manual_seed(seed)
+
     with open(args.config, 'r') as f:
         config = json.load(f)
 
     assert all(["map_names" in config, "map_timesteps" in config, "target_map" in config]), "Check config file"
     assert len(config["map_names"]) == len(config["map_timesteps"]), "Check config file"
 
-    curriculum = '->'.join(config["map_names"])
-    buffer_dtype = np.float16
-    experiment_name = f'{timestamp} {curriculum};{config["target_map"]} {buffer_dtype} {args.alg}'
     conf_name, __ = args.config.split('.')
-    args.save_path = os.path.join(conf_name, experiment_name, args.alg, str(i))
+    experiment_name = f'{timestamp} {args.alg} {i}'
+    args.save_path = os.path.join(conf_name, experiment_name)
     save_config(args)
     logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.INFO)
 
@@ -86,7 +85,20 @@ if __name__ == '__main__':
                                seed=seed,
                                shuffle=False,
                                )
-    envs = [
+    eval_envs = [
+        StarCraft2Env(map_name=m,
+                      step_mul=args.step_mul,
+                      difficulty=d,
+                      game_version=args.game_version,
+                      replay_dir=args.replay_dir,
+                      seed=seed,
+                      pad_agents=target_env.n_agents,
+                      pad_enemies=target_env.n_enemies,
+                      shuffle=False,
+                      )
+        for m, d in zip(config["eval_maps"], difficulties)
+    ]
+    train_envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
                       difficulty=d,
@@ -101,7 +113,7 @@ if __name__ == '__main__':
         for m, d in zip(config["map_names"], difficulties)
     ]
 
-    for env in envs:
+    for env in train_envs:
         env_info = env.get_env_info()
         logging.info(env_info)
 
@@ -114,16 +126,18 @@ if __name__ == '__main__':
     args.obs_shape = env_info["obs_shape"]
     args.episode_limit = env_info["episode_limit"]
 
-    runner = Runner(envs[0], args, target_env)
+    runner = Runner(train_envs[0], args, target_env)
+    runner.eval_envs = eval_envs
 
     new_buffer = True
+    buffer_dtype = np.float16
     if not args.evaluate:
-        for env, env_time in zip(envs, config["map_timesteps"]):
+        for env, env_time in zip(train_envs, config["map_timesteps"]):
             runner.train_env = env
             runner.args.n_steps = env_time
             runner.writer = SummaryWriter(os.path.join(args.save_path, env.map_name))
             args.episode_limit = env.get_env_info()["episode_limit"]
-            runner.switch = env.map_name != envs[-1].map_name
+            runner.switch = env.map_name != train_envs[-1].map_name
 
             if new_buffer and hasattr(runner, "buffer"):
                 args.n_agents = env.get_env_info()['n_agents']
