@@ -119,6 +119,36 @@ class ForwardCurriculum:
                 self.next()
 
 
+class SamplingCurriculum:
+    def __init__(self, envs: List[Tuple[StarCraft2Env, int]], p=[]):
+        self.envs = envs
+        assert len(p) == len(envs), "Need prob for each env"
+        assert np.sum(p) == 1.0, "Probs must sum to 1"
+        self.p = np.array(p)
+        self.rng = np.random.default_rng(0)
+
+    def get(self):
+        keep = [
+            i
+            for i, (env, max_steps) in enumerate(self.envs)
+            if env.total_steps < max_steps
+        ]
+        if len(self.p):
+            self.p = self.p[keep]
+            self.p /= np.sum(self.p) # normalise remaining probs
+
+        self.envs = [self.envs[i] for i in keep]
+
+        if not len(self.envs):
+            raise IndexError("No more envs")
+
+        idx = self.rng.choice(np.arange(len(self.envs)), 1, p=self.p)[0]
+        env, steps = self.envs[idx]
+        return env
+
+    def update(self, *args, **kwargs):
+        pass
+
 if __name__ == '__main__':
     args = get_common_args()
     args.alg = 'qmix'
@@ -240,9 +270,18 @@ if __name__ == '__main__':
         patience=20,
         switch_callback=switch_callback
     )
+    curriculum = SamplingCurriculum(
+        [
+            (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
+        ],
+        p=[0.2, 0.8]
+    )
+
+
     runner.curriculum = curriculum
     runner.eval_envs = eval_envs
     runner.writer = SummaryWriter(args.save_path)
+
 
     if not args.evaluate:
         runner.run()
