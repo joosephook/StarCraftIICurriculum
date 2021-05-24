@@ -43,6 +43,8 @@ class QMIX:
             self.target_rnn.cuda()
             self.eval_qmix_net.cuda()
             self.target_qmix_net.cuda()
+        else:
+            self.cuda = False
         self.model_dir = args.save_path
         # 如果存在模型则加载模型
         if self.args.load_model:
