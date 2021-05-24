@@ -34,46 +34,19 @@ def save_config(args):
         shutil.copy(f, os.path.join(args.save_path, f))
 
 
-class TrainEnvs:
-    def __init__(self, envs: List[Tuple[StarCraft2Env, int]], p=None):
-        self.envs = envs
-        self.p = p
-        if p:
-            assert len(p) == len(envs), "Need prob for each env"
-            assert np.sum(p) == 1.0, "Probs must sum to 1"
-            self.p = np.array(p)
-        self.rng = np.random.default_rng(0)
-
-    def get(self):
-        keep = [
-            i
-            for i, (env, max_steps) in enumerate(self.envs)
-            if env.total_steps < max_steps
-        ]
-        if self.p:
-            self.p = np.array([self.p[i] for i in keep])
-            self.p /= np.sum(self.p) # normalise remaining probs
-
-        self.envs = [self.envs[i] for i in keep]
-
-        if not len(self.envs):
-            raise IndexError("No more envs")
-        if self.p:
-            idx = self.rng.choice(np.arange(len(self.envs)), 1, p=self.p)
-            return self.envs[idx]
-        else:
-            return self.envs[0]
-
 class ForwardCurriculum:
     def __init__(self, envs: List[Tuple[StarCraft2Env, int]], patience, switch_callback):
         self.envs = envs
         self._patience = patience
-        self.patience = patience
+        self.patience = None
         self.current_env = None
         self.current_max_steps = None
         self.historical_params = None
         self.no_improvement = None
         self.switch_callback = switch_callback
+        for e, _ in envs:
+            e.switch = e.map_name != envs[-1][0].map_name
+
         self.next()
 
     def get(self):
@@ -87,6 +60,7 @@ class ForwardCurriculum:
         self.current_env, self.current_max_steps = self.envs.pop(0)
         self.historical_params = {}
         self.no_improvement = 0
+        self.patience = self._patience
         self.switch_callback()
 
     def update(self, performance, agents, time_steps, train_steps):
@@ -194,6 +168,7 @@ if __name__ == '__main__':
     else:
         difficulties = [args.difficulty]*len(config["map_names"])
 
+
     target_env = StarCraft2Env(map_name=config["target_map"],
                                step_mul=args.step_mul,
                                difficulty=args.difficulty,
@@ -244,8 +219,6 @@ if __name__ == '__main__':
             noise_dim=args.noise_dim,
             dtype=np.float16,
         )
-        env.switch = env.map_name != train_envs[-1].map_name and not config.get("probs")
-        env.patience = 20
         logging.info(env_info)
     # change args to accommodate largest possible env
     # assures the widths of the created neural networks are sufficient
@@ -263,19 +236,22 @@ if __name__ == '__main__':
         runner.agents.policy.reset_optimiser()
         runner.agents.policy.load_target()
 
-    curriculum = ForwardCurriculum(
-        [
-            (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
-        ],
-        patience=20,
-        switch_callback=switch_callback
-    )
-    curriculum = SamplingCurriculum(
-        [
-            (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
-        ],
-        p=[0.2, 0.8]
-    )
+    if config.get("probs", None):
+        curriculum = SamplingCurriculum(
+            [
+                (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
+            ],
+            p=[0.2, 0.8]
+        )
+    else:
+        curriculum = ForwardCurriculum(
+            [
+                (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
+            ],
+            patience=config.get("patience", 20),
+            switch_callback=switch_callback
+        )
+
 
 
     runner.curriculum = curriculum
