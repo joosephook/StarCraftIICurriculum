@@ -43,6 +43,7 @@ class Runner:
         self.patience = 20
         self.writer: SummaryWriter = None
         self.eval_envs = None
+        self.debug = False
 
     def run(self):
         time_steps, train_steps, evaluate_steps = 0, 0, -1
@@ -100,16 +101,17 @@ class Runner:
 
             self.writer.add_scalar(f'Reward/train/', train_episode_reward, global_step=time_steps)
             self.writer.add_scalar(f'Reward/train/{env.map_name}', train_episode_reward, global_step=time_steps)
-            for n, p in self.agents.policy.eval_rnn.named_parameters():
-                self.writer.add_scalar(f'eval_rnn/{n}/norm', p.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_rnn/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_rnn/{n}/norm/{env.map_name}', p.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_rnn/grad/{n}/norm/{env.map_name}', p.grad.norm(), global_step=time_steps)
-            for n, p in self.agents.policy.eval_qmix_net.named_parameters():
-                self.writer.add_scalar(f'eval_qmix_net/{n}/norm', p.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_qmix_net/{n}/norm/{env.map_name}', p.norm(), global_step=time_steps)
-                self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm/{env.map_name}', p.grad.norm(), global_step=time_steps)
+            if self.debug:
+                for n, p in self.agents.policy.eval_rnn.named_parameters():
+                    self.writer.add_scalar(f'eval_rnn/{n}/norm', p.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_rnn/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_rnn/{n}/norm/{env.map_name}', p.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_rnn/grad/{n}/norm/{env.map_name}', p.grad.norm(), global_step=time_steps)
+                for n, p in self.agents.policy.eval_qmix_net.named_parameters():
+                    self.writer.add_scalar(f'eval_qmix_net/{n}/norm', p.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm', p.grad.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_qmix_net/{n}/norm/{env.map_name}', p.norm(), global_step=time_steps)
+                    self.writer.add_scalar(f'eval_qmix_net/grad/{n}/norm/{env.map_name}', p.grad.norm(), global_step=time_steps)
 
     def evaluate(self, time_steps, env):
         win_number = 0
