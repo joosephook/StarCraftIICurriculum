@@ -94,31 +94,22 @@ class ForwardCurriculum:
 
 
 class SamplingCurriculum:
-    def __init__(self, envs: List[Tuple[StarCraft2Env, int]], p=[]):
+    def __init__(self, envs: List[StarCraft2Env], p=[], total_timesteps=None):
         self.envs = envs
         assert len(p) == len(envs), "Need prob for each env"
         assert np.sum(p) == 1.0, "Probs must sum to 1"
         self.p = np.array(p)
         self.rng = np.random.default_rng(0)
+        self.total_timesteps = total_timesteps
+        self.current_timesteps = 0
 
     def get(self):
-        keep = [
-            i
-            for i, (env, max_steps) in enumerate(self.envs)
-            if env.total_steps < max_steps
-        ]
-        if len(self.p):
-            self.p = self.p[keep]
-            self.p /= np.sum(self.p) # normalise remaining probs
-
-        self.envs = [self.envs[i] for i in keep]
-
-        if not len(self.envs):
-            raise IndexError("No more envs")
+        self.current_timesteps = sum(e.total_steps for e in self.envs)
+        if self.current_timesteps >= self.total_timesteps:
+            raise IndexError(f"Trained for {self.current_timesteps}")
 
         idx = self.rng.choice(np.arange(len(self.envs)), 1, p=self.p)[0]
-        env, steps = self.envs[idx]
-        return env
+        return self.envs[idx]
 
     def update(self, *args, **kwargs):
         pass
@@ -154,8 +145,9 @@ if __name__ == '__main__':
     with open(args.config, 'r') as f:
         config = json.load(f)
 
-    assert all(["map_names" in config, "map_timesteps" in config, "target_map" in config]), "Check config file"
-    assert len(config["map_names"]) == len(config["map_timesteps"]), "Check config file"
+    assert all(["map_names" in config, "target_map" in config]), "Check config file"
+    if config.get("map_timesteps", None):
+        assert len(config["map_timesteps"]) == len(config["map_names"]), "Check map timesteps and map names"
 
     conf_name, __ = args.config.split('.')
     experiment_name = f'{timestamp} {args.alg} {i}'
@@ -167,7 +159,6 @@ if __name__ == '__main__':
         difficulties =  config["difficulties"]
     else:
         difficulties = [args.difficulty]*len(config["map_names"])
-
 
     target_env = StarCraft2Env(map_name=config["target_map"],
                                step_mul=args.step_mul,
@@ -200,6 +191,7 @@ if __name__ == '__main__':
                       pad_agents=target_env.n_agents,
                       pad_enemies=target_env.n_enemies,
                       shuffle=False,
+                      noise=config.get("noise", None) if m != config["target_map"] else None
                       )
 
         for m, d in zip(config["map_names"], difficulties)
@@ -236,11 +228,12 @@ if __name__ == '__main__':
         runner.agents.policy.reset_optimiser()
         runner.agents.policy.load_target()
 
-    if config.get("probs", None):
+    if config.get("probs", None) and config.get("total_timesteps", None):
         curriculum = SamplingCurriculum(
             [
-                (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
+                env for env in train_envs
             ],
+            total_timesteps=config["total_timesteps"],
             p=[0.2, 0.8]
         )
     else:
