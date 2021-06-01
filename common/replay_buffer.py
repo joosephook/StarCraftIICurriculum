@@ -11,7 +11,6 @@ class ReplayBuffer:
         self.size = size
         self.episode_limit = episode_limit
         self.alg = alg
-        self.noise_dim = noise_dim
 
         # memory management
         self.current_idx = 0
