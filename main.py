@@ -94,7 +94,7 @@ class ForwardCurriculum:
 
 
 class SamplingCurriculum:
-    def __init__(self, envs: List[StarCraft2Env], p=[], total_timesteps=None):
+    def __init__(self, envs: List[StarCraft2Env], p=[], total_timesteps=None, switch_after=None):
         self.envs = envs
         assert len(p) == len(envs), "Need prob for each env"
         assert np.sum(p) == 1.0, "Probs must sum to 1"
@@ -102,11 +102,15 @@ class SamplingCurriculum:
         self.rng = np.random.default_rng(0)
         self.total_timesteps = total_timesteps
         self.current_timesteps = 0
+        self.switch_after = switch_after
 
     def get(self):
         self.current_timesteps = sum(e.total_steps for e in self.envs)
         if self.current_timesteps >= self.total_timesteps:
             raise IndexError(f"Trained for {self.current_timesteps}")
+
+        if self.switch_after and self.current_timesteps >= self.switch_after:
+            return self.envs[-1]
 
         idx = self.rng.choice(np.arange(len(self.envs)), 1, p=self.p)[0]
         return self.envs[idx]
@@ -178,6 +182,7 @@ if __name__ == '__main__':
                       pad_agents=target_env.n_agents,
                       pad_enemies=target_env.n_enemies,
                       shuffle=False,
+                      vsn=config.get("vsn", None) if m != config["target_map"] else None,
                       )
         for m, d in zip(config["eval_maps"], difficulties)
     ]
@@ -190,8 +195,10 @@ if __name__ == '__main__':
                       seed=seed,
                       pad_agents=target_env.n_agents,
                       pad_enemies=target_env.n_enemies,
+                      # shuffle=m != config["target_map"],
                       shuffle=False,
-                      noise=config.get("noise", None) if m != config["target_map"] else None
+                      noise=config.get("noise", None) if m != config["target_map"] else None,
+                      vsn=config.get("vsn", None) if m != config["target_map"] else None,
                       )
 
         for m, d in zip(config["map_names"], difficulties)
@@ -208,7 +215,6 @@ if __name__ == '__main__':
             episode_limit=env_info['episode_limit'],
             size=args.buffer_size,
             alg=args.alg,
-            noise_dim=args.noise_dim,
             dtype=np.float16,
         )
         logging.info(env_info)
@@ -234,7 +240,8 @@ if __name__ == '__main__':
                 env for env in train_envs
             ],
             total_timesteps=config["total_timesteps"],
-            p=[0.2, 0.8]
+            p=config.get("probs"),
+            switch_after=config.get("switch_after", None)
         )
     else:
         curriculum = ForwardCurriculum(
@@ -242,7 +249,7 @@ if __name__ == '__main__':
                 (env, steps) for env, steps in zip(train_envs, config["map_timesteps"])
             ],
             patience=config.get("patience", 20),
-            switch_callback=switch_callback
+            switch_callback=switch_callback,
         )
 
 
