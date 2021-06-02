@@ -13,7 +13,7 @@ import time
 import os
 import numpy as np
 import logging
-
+from pathlib import Path
 
 def save_config(args):
     import shutil
@@ -25,7 +25,7 @@ def save_config(args):
         f.writelines(fin.readlines())
     with open(args.save_path + '/arguments.py', 'w') as f, open('common/arguments.py', 'r') as fin:
         f.writelines(fin.readlines())
-    with open(args.save_path + f'/{args.config}', 'w') as f, open(args.config, 'r') as fin:
+    with open(args.save_path + f'/{Path(args.config).name}', 'w') as f, open(args.config, 'r') as fin:
         f.writelines(fin.readlines())
 
     for f in 'common network agent policy'.split():
