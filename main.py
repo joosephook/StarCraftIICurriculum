@@ -184,7 +184,7 @@ if __name__ == '__main__':
                       shuffle=False,
                       vsn=config.get("vsn", None) if m != config["target_map"] else None,
                       )
-        for m, d in zip(config["eval_maps"], difficulties)
+        for m, d in zip(config.get("eval_maps", []), difficulties)
     ]
     train_envs = [
         StarCraft2Env(map_name=m,
