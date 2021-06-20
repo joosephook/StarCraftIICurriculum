@@ -1,4 +1,7 @@
 import io
+
+from collections import Counter
+
 import json
 from typing import Dict, List, Tuple
 
@@ -7,13 +10,15 @@ from torch.utils.tensorboard import SummaryWriter
 from common.replay_buffer import ReplayBuffer
 from runner import Runner
 from smac.env import StarCraft2Env
-from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, get_commnet_args, get_g2anet_args
+from common.arguments import get_common_args, get_coma_args, get_mixer_args, get_centralv_args, get_reinforce_args, \
+    get_commnet_args, get_g2anet_args
 
 import time
 import os
 import numpy as np
 import logging
 from pathlib import Path
+
 
 def save_config(args):
     import shutil
@@ -118,6 +123,18 @@ class SamplingCurriculum:
     def update(self, *args, **kwargs):
         pass
 
+
+def indices(unit_types):
+    unit_types = Counter(sorted(unit_types))
+
+    def get_indices():
+        keys = sorted(unit_types.keys())
+        start_idx = [0] + np.cumsum(list(unit_types.values())[:-1]).tolist()
+        return dict(zip(keys, start_idx))
+
+    return get_indices
+
+
 if __name__ == '__main__':
     args = get_common_args()
     args.alg = 'qmix'
@@ -142,7 +159,8 @@ if __name__ == '__main__':
     i = args.i
 
     import torch
-    seed = 12345+i
+
+    seed = 12345 + i
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -160,9 +178,9 @@ if __name__ == '__main__':
     logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.INFO)
 
     if config.get("difficulties"):
-        difficulties =  config["difficulties"]
+        difficulties = config["difficulties"]
     else:
-        difficulties = [args.difficulty]*len(config["map_names"])
+        difficulties = [args.difficulty] * len(config["map_names"])
 
     target_env = StarCraft2Env(map_name=config["target_map"],
                                step_mul=args.step_mul,
@@ -172,6 +190,22 @@ if __name__ == '__main__':
                                seed=seed,
                                shuffle=False,
                                )
+    target_env.reset()
+    ally_indices = indices([unit.unit_type for unit in target_env._obs.observation.raw_data.units if unit.owner == 1])
+    enemy_indices = indices([unit.unit_type for unit in target_env._obs.observation.raw_data.units if unit.owner != 1])
+    target_env.close()
+
+    target_env = StarCraft2Env(map_name=config["target_map"],
+                               step_mul=args.step_mul,
+                               difficulty=args.difficulty,
+                               game_version=args.game_version,
+                               replay_dir=args.replay_dir,
+                               seed=seed,
+                               shuffle=False,
+                               ally_indices=ally_indices,
+                               enemy_indices=enemy_indices,
+                               )
+
     eval_envs = [
         StarCraft2Env(map_name=m,
                       step_mul=args.step_mul,
@@ -183,6 +217,8 @@ if __name__ == '__main__':
                       pad_enemies=target_env.n_enemies,
                       shuffle=False,
                       vsn=config.get("vsn", None) if m != config["target_map"] else None,
+                      ally_indices=ally_indices,
+                      enemy_indices=enemy_indices,
                       )
         for m, d in zip(config.get("eval_maps", []), difficulties)
     ]
@@ -199,6 +235,8 @@ if __name__ == '__main__':
                       shuffle=False,
                       noise=config.get("noise", None) if m != config["target_map"] else None,
                       vsn=config.get("vsn", None) if m != config["target_map"] else None,
+                      ally_indices=ally_indices,
+                      enemy_indices=enemy_indices,
                       )
 
         for m, d in zip(config["map_names"], difficulties)
@@ -229,10 +267,12 @@ if __name__ == '__main__':
 
     runner = Runner(None, args, target_env)
 
+
     def switch_callback():
         runner.rolloutWorker.epsilon = args.epsilon
         runner.agents.policy.reset_optimiser()
         runner.agents.policy.load_target()
+
 
     if config.get("probs", None) and config.get("total_timesteps", None):
         curriculum = SamplingCurriculum(
@@ -252,12 +292,9 @@ if __name__ == '__main__':
             switch_callback=switch_callback,
         )
 
-
-
     runner.curriculum = curriculum
     runner.eval_envs = eval_envs
     runner.writer = SummaryWriter(args.save_path)
-
 
     if not args.evaluate:
         runner.run()
