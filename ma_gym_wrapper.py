@@ -32,9 +32,10 @@ class MAGymWrapper(MultiAgentEnv):
         self.agents = range(self.n_agents)
         self.n_actions = self.get_total_actions()
         self.episode_limit = self.env._max_steps
-        self.total_steps = self.env._step_count
+        self.total_steps = 0
 
     def reset(self)-> Tuple[List[Obs], State]:
+        self.total_steps += self.env._step_count
         observations = self.env.reset()
         return list(map(np.asarray, observations)), np.asarray(self.env.get_agent_obs())
 
@@ -43,8 +44,6 @@ class MAGymWrapper(MultiAgentEnv):
         self.last_action *= 0
         for a in actions:
             self.last_action[a] = 1
-        self.total_steps = self.env._step_count
-
         return Reward(sum(rewards)), Terminated(all(dones)), Info({})
 
     def get_obs(self) -> List[Obs]:
