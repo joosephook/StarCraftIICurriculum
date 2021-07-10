@@ -169,11 +169,11 @@ if __name__ == '__main__':
         MAGymWrapper(TrafficJunction(**conf), fake_agents=n_agents)
         for conf in config["traffic_junction"]["eval"]
     ]
+    train_timesteps = [c.pop("timesteps") for c in config["traffic_junction"]["train"]]
     train_envs = [
         MAGymWrapper(TrafficJunction(**conf), fake_agents=n_agents)
-        for conf in config["traffic_junction"]["eval"]
+        for conf in config["traffic_junction"]["train"]
     ]
-    train_timesteps = [c["timesteps"] for c in config["traffic_junction"]["train"]]
 
     for env in train_envs:
         env_info = env.get_env_info()
