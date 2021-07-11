@@ -1,0 +1,12 @@
+{
+  "traffic_junction": {
+    "target": {"grid_shape": [14, 14], "n_max": 10},
+    "train":  [
+      {"grid_shape": [14, 14], "n_max": 4, "timesteps": 2000000, "collision_reward": -1},
+      {"grid_shape": [14, 14], "n_max": 10, "timesteps": 2000000, "collision_reward": -1}
+    ],
+    "eval": [{"grid_shape": [14, 14], "n_max": 10}],
+    "probs": [0.2, 0.8],
+    "total_timesteps": 2000000
+  }
+}
