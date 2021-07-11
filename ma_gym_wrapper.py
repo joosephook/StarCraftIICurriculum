@@ -33,6 +33,8 @@ class MAGymWrapper(MultiAgentEnv):
         self.n_actions = self.get_total_actions()
         self.episode_limit = self.env._max_steps
         self.total_steps = 0
+        self.obs_size = self.get_obs_size()
+        self.state_size = self.get_state_size()
 
     def reset(self)-> Tuple[List[Obs], State]:
         self.total_steps += self.env._step_count
@@ -50,13 +52,20 @@ class MAGymWrapper(MultiAgentEnv):
         return [np.asarray(self.get_obs_agent(i)) for i in range(self.env.n_agents)]
 
     def get_obs_agent(self, agent_id) -> Obs:
-        return self.env.get_agent_obs()[agent_id]
+        padded = np.zeros((*self.env._agent_view_mask, self.fake_agents+2+self.env._n_routes))
+        obs = np.asarray(self.env.get_agent_obs()[agent_id]).reshape((*self.env._agent_view_mask, self.env.n_agents+2+self.env._n_routes))
+        padded[:, :, :self.env.n_agents] = obs[:, :, :self.env.n_agents]
+        padded[:, :, -(2+self.env._n_routes):] = obs[:, :, self.env.n_agents:]
+        return padded.flatten()
 
     def get_obs_size(self) -> int:
         return self.get_obs()[0].shape[-1]
 
     def get_state(self) -> State:
-        return np.asarray(self.get_obs()).ravel()
+        padded = np.zeros(self.fake_agents*self.obs_size)
+        state = np.asarray(self.get_obs()).ravel()
+        padded[:len(state)] = state
+        return padded
 
     def get_state_size(self) -> int:
         return np.asarray(self.get_state()).ravel().shape[-1]
