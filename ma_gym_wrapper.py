@@ -1,5 +1,5 @@
 from smac.env.multiagentenv import MultiAgentEnv
-from ma_gym.envs.traffic_junction.traffic_junction import TrafficJunction
+from ma_gym.envs.traffic_junction_hard.traffic_junction_hard import TrafficJunctionHard
 from typing import Dict, List, Tuple, NewType
 import numpy as np
 
@@ -14,7 +14,7 @@ OneEncoded = NewType('OneEncoded', np.ndarray)
 
 
 class MAGymWrapper(MultiAgentEnv):
-    def __init__(self, env: TrafficJunction, fake_agents):
+    def __init__(self, env: TrafficJunctionHard, fake_agents):
         self.env = env
         self.fake_agents = fake_agents
         self.env_args = dict(
@@ -25,7 +25,7 @@ class MAGymWrapper(MultiAgentEnv):
             arrive_prob=env._arrive_prob,
             full_observable=env.full_observable
         )
-        self.map_name = f'TrafficJuncion({self.env_args})'
+        self.map_name = f'TrafficJuncionHard({self.env_args})'
         self.env.reset() # populate necessary data structures
         self.last_action = np.zeros((self.fake_agents, self.get_total_actions()), dtype=np.int)
         self.n_agents = env.n_agents
@@ -44,8 +44,8 @@ class MAGymWrapper(MultiAgentEnv):
     def step(self, actions)-> Tuple[Reward, Terminated, Info]:
         observations, rewards, dones, info = self.env.step(actions)
         self.last_action *= 0
-        for a in actions:
-            self.last_action[a] = 1
+        for i, a in enumerate(actions):
+            self.last_action[i, a] = 1
         return Reward(sum(rewards)), Terminated(all(dones)), Info({})
 
     def get_obs(self) -> List[Obs]:
@@ -53,9 +53,9 @@ class MAGymWrapper(MultiAgentEnv):
 
     def get_obs_agent(self, agent_id) -> Obs:
         padded = np.zeros((*self.env._agent_view_mask, self.fake_agents+2+self.env._n_routes))
-        obs = np.asarray(self.env.get_agent_obs()[agent_id]).reshape((*self.env._agent_view_mask, self.env.n_agents+2+self.env._n_routes))
+        obs = np.asarray(self.env.get_agent_obs()[agent_id]).reshape((*self.env._agent_view_mask, self.env.n_agents+2+2))
         padded[:, :, :self.env.n_agents] = obs[:, :, :self.env.n_agents]
-        padded[:, :, -(2+self.env._n_routes):] = obs[:, :, self.env.n_agents:]
+        padded[:, :, -(2+2):] = obs[:, :, self.env.n_agents:]
         return padded.flatten()
 
     def get_obs_size(self) -> int:
@@ -74,7 +74,7 @@ class MAGymWrapper(MultiAgentEnv):
         return [self.get_avail_agent_actions(i) for i in range(self.env.n_agents)]
 
     def get_avail_agent_actions(self, agent_id) -> OneEncoded:
-        return np.ones(self.env.action_space._agents_action_space[0].n)
+        return self.env.get_avail_actions_agent(agent_id)
 
     def get_total_actions(self) -> int: # number of actions
         return self.env.action_space._agents_action_space[0].n

@@ -1,5 +1,6 @@
 import io
 from ma_gym.envs.traffic_junction import TrafficJunction
+from ma_gym.envs.traffic_junction_hard import TrafficJunctionHard
 
 from collections import Counter
 
@@ -163,15 +164,15 @@ if __name__ == '__main__':
     logging.basicConfig(filename=os.path.join(args.save_path, 'out.log'), level=logging.INFO)
 
     n_agents = config["traffic_junction"]["target"]["n_max"]
-    target_env = MAGymWrapper(TrafficJunction(**config["traffic_junction"]["target"]), n_agents)
+    target_env = MAGymWrapper(TrafficJunctionHard(**config["traffic_junction"]["target"]), n_agents)
 
     eval_envs = [
-        MAGymWrapper(TrafficJunction(**conf), fake_agents=n_agents)
+        MAGymWrapper(TrafficJunctionHard(**conf), fake_agents=n_agents)
         for conf in config["traffic_junction"]["eval"]
     ]
     train_timesteps = [c.pop("timesteps") for c in config["traffic_junction"]["train"]]
     train_envs = [
-        MAGymWrapper(TrafficJunction(**conf), fake_agents=n_agents)
+        MAGymWrapper(TrafficJunctionHard(**conf), fake_agents=n_agents)
         for conf in config["traffic_junction"]["train"]
     ]
 
